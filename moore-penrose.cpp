@@ -7,9 +7,6 @@ using namespace std;
  
 // C++ program to calculate Moore-Penrose inverse matrix
 
-#define N 5 //number of rows
-#define M 4 //number of columns
-
 //transpose a N*M matrix
 void transpose(float *a, float *a_t, int row, int col) {
     int k = 0;
@@ -100,8 +97,7 @@ void inverse(float* matrix, float* inverse, int n) {
     identity_reduce(matrix, inverse, n);
 }
 
-// decompose a simmetric matrix into a lower triangular and his transpose
-// this function return only the lower triangular
+// return the lower triangular matrix of a symmetric matrix
 void cholesky_decomposition(float* matrix, float* lower, int n) { 
     memset(lower, 0, sizeof(lower));
   
@@ -125,6 +121,20 @@ void cholesky_decomposition(float* matrix, float* lower, int n) {
     } 
 } 
 
+//return the number of column to drop at the end of the lower triangular matrix
+int drop_zero_column(float* a, int n) {
+    int drop = 0;
+    for(int j = n-1; j >= 0; j--) {
+        for(int i = n-1; i >= 0; i--) {
+            //cout << "j = " << j << " i = " << i << " E = " << a[i*n + j] << " drop " << drop << endl;
+            if(a[i*n + j] != 0)
+                return drop;
+        }
+        drop++;
+    }
+    return drop;
+}
+
 template<class T>
 void display(T *a, int row, int col) {
     for (int i = 0; i < row; i++) {
@@ -143,70 +153,86 @@ void display_1D(T* a) {
 
 // Driver program
 int main()
-{ 
-    float* matrix = new float[N*M]; // A matrix
-    float* t_matrix = new float[M*N]; // A_t matrix
-    float* matrix_mult = new float[M*M]; // A_t * A matrix
-    float* pseudoinverse = new float[M*N]; // A+ matrix
-    float* inv = new float[M*M]; // (A_t * A)^-1 matrix
-    float* l_tri_low = new float[M*M]; // lower triangular of (A_t * A)
-    float* l_tri_up = new float[M*M];  // upper triangular of (A_t * A)
-    float* l_tri_up_low = new float[M*M]; // upper tri * lower tri
+{
+    int N = 3; // number of rows
+    int M = 3; // number of columns
 
-    srand(time(NULL)); 
+    float* G = new float[N*M]; // start matrix
+    float* Gt = new float[M*N]; // transpose of G
+    float* A = new float[M*M]; // Gt * G
+    float* Y = new float[M*N]; // pseudoinverse
+    float* I = new float[M*M]; // inverse of Lt * L
+    float* L = new float[M*M]; // lower triangular of A
+    float* Lt = new float[M*M];  // upper triangular of A
+    float* Lt_L = new float[M*M]; // Lt * L
+
+    srand(time(NULL));
 
     for(int i = 0; i < N * M; i ++)
-        matrix[i] = rand() % 20;
+        G[i] = rand() % 20;
+
+    G[0] = 1;
+    G[1] = 2;
+    G[2] = 3;
+    G[3] = 4;
+    G[4] = 5;
+    G[5] = 6;
+    G[6] = 7;
+    G[7] = 8;
+    G[8] = 9;
     
-    cout << "\nA:\n";
-    display<float>(matrix, N, M);
+    cout << "\n----- G -----\n";
+    display<float>(G, N, M);
 
-    cout << "\nA_t:\n";
-    transpose(matrix, t_matrix, N, M);
-    display<float>(t_matrix, M, N);
+    cout << "\n----- Gt -----\n";
+    transpose(G, Gt, N, M);
+    display<float>(Gt, M, N);
 
-    cout << "\nA_t * A:\n";
-    multiply(t_matrix, M, N, matrix, N, M, matrix_mult); 
-    display(matrix_mult, M, M);
+    cout << "\n----- A -----\n";
+    multiply(Gt, M, N, G, N, M, A); 
+    display(A, M, M);
 
-    cout << "\nLower triangular of A_t * A\n";
-    cholesky_decomposition(matrix_mult, l_tri_low, M);
-    display(l_tri_low, M, M);
+    cout << "\n----- L -----\n";
+    cholesky_decomposition(A, L, M);
+    display(L, M, M);
 
-    cout <<"\nUpper triangular of A_t * A\n";
-    transpose(l_tri_low, l_tri_up, M, M);
-    display(l_tri_up, M, M);
+    int drop = drop_zero_column(L, M);
+    cout << "\n----- L dropped ("<< drop << " columns dropped) -----\n";
+    display(L, M, M - drop);
 
-    cout << "\nUpper tri * Lower tri\n";
-    multiply(l_tri_up, M, M, l_tri_low, M, M, l_tri_up_low);
-    display(l_tri_up_low, M, M);
+    cout <<"\n----- Lt -----\n";
+    transpose(L, Lt, M, M - drop);
+    display(Lt, M, M);
 
-    cout << "\n(Upper tri * Lower tri)^-1:\n";
-    inverse(l_tri_up_low, inv, M);
-    display(inv, M, M);
+    cout << "\n----- Lt * L ----- \n";
+    multiply(Lt, M, M, L, M, M, Lt_L);
+    display(Lt_L, M, M);
 
-    cout << "\nThe Moore-Penrose inverse is :\n";
-    float* matrix_mult_1 = new float[M*M];
-    float* matrix_mult_2 = new float[M*M];
-    multiply(l_tri_low, M, M, inv, M, M, matrix_mult);
-    multiply(matrix_mult, M, M, inv, M, M, matrix_mult_1);
-    multiply(matrix_mult_1, M, M, l_tri_up, M, M, matrix_mult_2);
-    multiply(matrix_mult_2, M, M, t_matrix, M, N, pseudoinverse);
-    display(pseudoinverse, M, N);
+    cout << "\n----- I -----\n";
+    inverse(Lt_L, I, M);
+    display(I, M, M);
 
-    // multiply(inv, M, M, t_matrix, M, N, pseudoinverse);
-    // cout << "\nThe Monroe-penrose inverse is :\n";
-    // display(pseudoinverse, M, N);
+    cout << "\n----- Y -----\n";
+    float* tmp = new float[M*M];
+    float* tmp1 = new float[M*M];
+    float* tmp2 = new float[M*M];
+    multiply(L, M, M, I, M, M, tmp);  // 3*2  2*2 --> 3*2
+    multiply(tmp, M, M, I, M, M, tmp1); //3*2  2*2 --> 3*2
+    multiply(tmp1, M, M, Lt, M, M, tmp2); //3*2 2*3 --> 3*3  
+    multiply(tmp2, M, M, Gt, M, N, Y); //3*3 3*3 --> 3*3
+    display(Y, M, N);
 
-    free(matrix);
-    free(t_matrix);
-    free(matrix_mult);
-    free(pseudoinverse);
-    free(inv);
-    free(l_tri_low);
-    free(l_tri_up);
-    free(matrix_mult_1);
-    free(matrix_mult_2);
+    free(G);
+    free(Gt);
+    free(A);
+    free(Y);
+    free(I);
+    free(L);
+    free(Lt);
+    free(Lt_L);
+    free(tmp);
+    free(tmp1);
+    free(tmp2);
 
     return 0;
 }
