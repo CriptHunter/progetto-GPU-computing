@@ -166,33 +166,33 @@ void display_1D(T* a) {
 // Driver program
 int main()
 {
-    int N = 3; // number of rows
-    int M = 3; // number of columns
+    int N = 6; // number of rows
+    int M = 4; // number of columns
 
     float* G = new float[N*M]; // start matrix
     float* Gt = new float[M*N]; // transpose of G
     float* A = new float[M*M]; // Gt * G
-    float* Y = new float[M*N]; // pseudoinverse
-    float* I = new float[M*M]; // inverse of St * S
     float* S = new float[M*M]; // lower triangular of A
-    float* St = new float[M*M];  // upper triangular of A
     float* L = new float[M*M]; // lower triangular with zero columns dropped
     float* Lt = new float[M*M]; // upper triangular with zero rows dropped
+    float* Lt_L = new float[M*M]; // Lt * L
+    float* I = new float[M*M]; // inverse of Lt * L
+    float* Y = new float[M*N]; // pseudoinverse
 
     srand(time(NULL));
 
     for(int i = 0; i < N * M; i ++)
         G[i] = rand() % 20;
 
-    G[0] = 1;
-    G[1] = 2;
-    G[2] = 3;
-    G[3] = 4;
-    G[4] = 5;
-    G[5] = 6;
-    G[6] = 7;
-    G[7] = 8;
-    G[8] = 9;
+    // G[0] = 1;
+    // G[1] = 2;
+    // G[2] = 3;
+    // G[3] = 4;
+    // G[4] = 5;
+    // G[5] = 6;
+    // G[6] = 7;
+    // G[7] = 8;
+    // G[8] = 9;
     
     cout << "\n----- G -----\n";
     display<float>(G, N, M);
@@ -214,26 +214,26 @@ int main()
     cout << "\n----- L("<< drop << " columns dropped) -----\n";
     display(L, M, M-drop);
 
-    cout <<"\n----- St -----\n";
-    transpose(S, St, M, M);
-    display(St, M, M);
+    cout <<"\n----- Lt -----\n";
+    transpose(L, Lt, M, M-drop);
+    display(Lt, M-drop, M);
 
-    cout << "\n----- St * S ----- \n";
-    multiply(St, M, M, S, M, M, St_S);
-    display(St_S, M, M);
+    cout << "\n----- Lt * L ----- \n";
+    multiply(Lt, M-drop, M, L, M, M-drop, Lt_L);
+    display(Lt_L, M-drop, M-drop);
 
     cout << "\n----- I -----\n";
-    inverse(St_S, I, M);
-    display(I, M, M);
+    inverse(Lt_L, I, M-drop);
+    display(I, M-drop, M-drop);
 
     cout << "\n----- Y -----\n";
     float* tmp = new float[M*M];
     float* tmp1 = new float[M*M];
     float* tmp2 = new float[M*M];
-    multiply(S, M, M, I, M, M, tmp);  // 3*2  2*2 --> 3*2
-    multiply(tmp, M, M, I, M, M, tmp1); //3*2  2*2 --> 3*2
-    multiply(tmp1, M, M, St, M, M, tmp2); //3*2 2*3 --> 3*3  
-    multiply(tmp2, M, M, Gt, M, N, Y); //3*3 3*3 --> 3*3
+    multiply(L, M, M-drop, I, M-drop, M-drop, tmp);
+    multiply(tmp, M, M-drop, I, M-drop, M-drop, tmp1);
+    multiply(tmp1, M, M-drop, Lt, M-drop, M, tmp2); 
+    multiply(tmp2, M, M, Gt, M, N, Y);
     display(Y, M, N);
 
     free(G);
@@ -242,8 +242,7 @@ int main()
     free(Y);
     free(I);
     free(S);
-    free(St);
-    free(St_S);
+    free(Lt_L);
     free(tmp);
     free(tmp1);
     free(tmp2);
