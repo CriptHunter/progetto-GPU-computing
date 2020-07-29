@@ -122,7 +122,7 @@ void cholesky_decomposition(float* matrix, float* lower, int n) {
 } 
 
 //return the number of column to drop at the end of the lower triangular matrix
-int drop_zero_column(float* a, int n) {
+int drop_column_count(float* a, int n) {
     int drop = 0;
     for(int j = n-1; j >= 0; j--) {
         for(int i = n-1; i >= 0; i--) {
@@ -132,6 +132,18 @@ int drop_zero_column(float* a, int n) {
         }
         drop++;
     }
+    
+    return drop;
+}
+
+int drop_zero_column(float* a, float* b, int n) {
+    int drop = drop_column_count(a, n);
+    int k = 0;
+    for(int i = 0; i < n; i++)
+        for(int j = 0; j < n-drop; j++) {
+            b[k] = a[i*n + j];
+            k++;
+        }
     return drop;
 }
 
@@ -139,7 +151,7 @@ template<class T>
 void display(T *a, int row, int col) {
     for (int i = 0; i < row; i++) {
         for (int j = 0; j < col; j++)
-            cout << a[i * col + j] << " ";
+            cout << a[i * col + j] << "\t";
         cout << endl;
     }
 }
@@ -161,10 +173,11 @@ int main()
     float* Gt = new float[M*N]; // transpose of G
     float* A = new float[M*M]; // Gt * G
     float* Y = new float[M*N]; // pseudoinverse
-    float* I = new float[M*M]; // inverse of Lt * L
-    float* L = new float[M*M]; // lower triangular of A
-    float* Lt = new float[M*M];  // upper triangular of A
-    float* Lt_L = new float[M*M]; // Lt * L
+    float* I = new float[M*M]; // inverse of St * S
+    float* S = new float[M*M]; // lower triangular of A
+    float* St = new float[M*M];  // upper triangular of A
+    float* L = new float[M*M]; // lower triangular with zero columns dropped
+    float* Lt = new float[M*M]; // upper triangular with zero rows dropped
 
     srand(time(NULL));
 
@@ -192,33 +205,34 @@ int main()
     multiply(Gt, M, N, G, N, M, A); 
     display(A, M, M);
 
-    cout << "\n----- L -----\n";
-    cholesky_decomposition(A, L, M);
-    display(L, M, M);
+    cout << "\n----- S -----\n";
+    cholesky_decomposition(A, S, M);
+    display(S, M, M);
 
-    int drop = drop_zero_column(L, M);
-    cout << "\n----- L dropped ("<< drop << " columns dropped) -----\n";
-    display(L, M, M - drop);
+    int drop = drop_zero_column(S, L, M);
 
-    cout <<"\n----- Lt -----\n";
-    transpose(L, Lt, M, M - drop);
-    display(Lt, M, M);
+    cout << "\n----- L("<< drop << " columns dropped) -----\n";
+    display(L, M, M-drop);
 
-    cout << "\n----- Lt * L ----- \n";
-    multiply(Lt, M, M, L, M, M, Lt_L);
-    display(Lt_L, M, M);
+    cout <<"\n----- St -----\n";
+    transpose(S, St, M, M);
+    display(St, M, M);
+
+    cout << "\n----- St * S ----- \n";
+    multiply(St, M, M, S, M, M, St_S);
+    display(St_S, M, M);
 
     cout << "\n----- I -----\n";
-    inverse(Lt_L, I, M);
+    inverse(St_S, I, M);
     display(I, M, M);
 
     cout << "\n----- Y -----\n";
     float* tmp = new float[M*M];
     float* tmp1 = new float[M*M];
     float* tmp2 = new float[M*M];
-    multiply(L, M, M, I, M, M, tmp);  // 3*2  2*2 --> 3*2
+    multiply(S, M, M, I, M, M, tmp);  // 3*2  2*2 --> 3*2
     multiply(tmp, M, M, I, M, M, tmp1); //3*2  2*2 --> 3*2
-    multiply(tmp1, M, M, Lt, M, M, tmp2); //3*2 2*3 --> 3*3  
+    multiply(tmp1, M, M, St, M, M, tmp2); //3*2 2*3 --> 3*3  
     multiply(tmp2, M, M, Gt, M, N, Y); //3*3 3*3 --> 3*3
     display(Y, M, N);
 
@@ -227,9 +241,9 @@ int main()
     free(A);
     free(Y);
     free(I);
-    free(L);
-    free(Lt);
-    free(Lt_L);
+    free(S);
+    free(St);
+    free(St_S);
     free(tmp);
     free(tmp1);
     free(tmp2);
