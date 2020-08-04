@@ -7,6 +7,22 @@ using namespace std;
  
 // C++ program to calculate Moore-Penrose inverse matrix
 
+template<class T>
+void display(T *a, int row, int col) {
+    for (int i = 0; i < row; i++) {
+        for (int j = 0; j < col; j++)
+            cout << a[i * col + j] << "\t";
+        cout << endl;
+    }
+}
+
+template<class T> 
+void display_1D(T* a) {
+    for(int i = 0; i < 20; i++) 
+        cout << a[i] << " ";
+    cout << endl;
+}
+
 //transpose a N*M matrix
 void transpose(float *a, float *a_t, int row, int col) {
     int k = 0;
@@ -29,6 +45,17 @@ void multiply(float *a, int row1, int col1, float *b, int row2, int col2, float*
                 sum = sum + a[i * col1 + k] * b[k * col2 + j];
             matrix_mult[i * col2 + j] = sum;
         }
+    }
+}
+
+void subtract(float* a, float* b, int row, int col) {
+    for(int i = 0; i < row*col; i++) {
+
+        if(a[i] - b[i] < 1E-7)
+            a[i] = 0;
+        else
+            a[i] = a[i] - b[i];
+        
     }
 }
  
@@ -69,10 +96,10 @@ void diagonal_reduce(float* matrix, float* inverse, int n) {
         for(int j = 0; j < n; j++) {
             if(j != i) {
                 d = matrix[j*n + i] / matrix[i*n + i];   
-                for (int k = 0; k < n; k++) {
-                    matrix[j*n + k] -= matrix[i*n + k] * d;
-                    inverse[j*n + k] -= inverse[i*n + k] * d;
-                }
+                    for (int k = 0; k < n; k++) {
+                        matrix[j*n + k] -= matrix[i*n + k] * d;
+                        inverse[j*n + k] -= inverse[i*n + k] * d;
+                    }
             }
         }
     }
@@ -83,10 +110,10 @@ void identity_reduce(float* matrix, float* inverse, int n) {
     float d = 0.0;
     for(int i = 0; i < n; i++) {
         d = matrix[i*n + i];
-        for(int j = 0; j < n; j++) {
-            matrix[i*n +j] = matrix[i*n + j]/d;
-            inverse[i*n +j] = inverse[i*n + j]/d;
-        }
+            for(int j = 0; j < n; j++) {
+                matrix[i*n +j] = matrix[i*n + j]/d;
+                inverse[i*n +j] = inverse[i*n + j]/d;
+            }
     }
 }
 
@@ -99,7 +126,7 @@ void inverse(float* matrix, float* inverse, int n) {
 
 // return the lower triangular matrix of a symmetric matrix
 void cholesky_decomposition(float* matrix, float* lower, int n) { 
-    memset(lower, 0, sizeof(lower));
+    memset(lower, 0, sizeof(n));
   
     // Decomposing a matrix into Lower Triangular 
     for (int i = 0; i < n; i++) { 
@@ -119,55 +146,74 @@ void cholesky_decomposition(float* matrix, float* lower, int n) {
             } 
         } 
     } 
-} 
-
-//return the number of column to drop at the end of the lower triangular matrix
-int drop_column_count(float* a, int n) {
-    int drop = 0;
-    for(int j = n-1; j >= 0; j--) {
-        for(int i = n-1; i >= 0; i--) {
-            //cout << "j = " << j << " i = " << i << " E = " << a[i*n + j] << " drop " << drop << endl;
-            if(a[i*n + j] != 0)
-                return drop;
-        }
-        drop++;
-    }
-    
-    return drop;
 }
 
-int drop_zero_column(float* a, float* b, int n) {
-    int drop = drop_column_count(a, n);
+//return a submatrix given rows and columns indices
+float* submatrix(float* A, int n, int m, int row_start, int row_end, int col_start, int col_end) {
+    int n_rows = row_end - row_start + 1;
+    int n_cols = col_end - col_start + 1;
+    float* sub = new float[n_rows*n_cols];
+
     int k = 0;
-    for(int i = 0; i < n; i++)
-        for(int j = 0; j < n-drop; j++) {
-            b[k] = a[i*n + j];
+    for(int i = row_start; i <= row_end; i++)
+        for(int j = col_start; j <= col_end; j++) {
+            sub[k] = A[i*m + j];
             k++;
         }
-    return drop;
+    return sub;
 }
 
-template<class T>
-void display(T *a, int row, int col) {
-    for (int i = 0; i < row; i++) {
-        for (int j = 0; j < col; j++)
-            cout << a[i * col + j] << "\t";
-        cout << endl;
+int full_rank_cholesky_decomposition(float* A, float* L, int n) {
+    float tol = 1E-9;
+    int r = 0;
+
+    for(int k = 0; k < n; k++) {
+        r = r+1;
+      
+        float* a = submatrix(A, n, n, k, n-1, k, k);
+
+        if(r-2 >= 0) {
+            float* b = submatrix(L, n, n, k, n-1, 0, r-2);
+            float* c = submatrix(L, n, n, k, k, 0, r-2);
+            float* ct = new float[r-1];
+            transpose(c, ct, 1, r-1);
+            float* d = new float[(n-k)*1];
+            multiply(b, n-k, r-1, ct, r-1, 1, d);
+            subtract(a, d, n-k, 1);
+        }
+
+        for(int i = k; i < n; i++)
+            L[i*n + r-1] = a[i-k];
+
+        if(L[k*n + r-1] > tol) {
+            L[k*n + r-1] = sqrt(L[k*n + r-1]);
+
+            if (k+1 < n)
+                for(int i = k+1; i < n; i++)
+                    L[i*n + r-1] = L[i*n + r-1] / L[k*n + r-1]; 
+        }
+        else
+            r = r-1;
     }
+
+    return r;
+
 }
 
-template<class T> 
-void display_1D(T* a) {
-    for(int i = 0; i < 20; i++) 
-        cout << a[i] << " ";
-    cout << endl;
+void drop_zero_column(float* a, float* b, int n, int rank) {
+    int k = 0;
+    for(int i = 0; i < n; i++)
+        for(int j = 0; j < rank; j++) {
+            b[k] = a[i*n + j];
+            k++;
+        }    
 }
 
 // Driver program
 int main()
 {
     int N = 6; // number of rows
-    int M = 4; // number of columns
+    int M = 3; // number of columns
 
     float* G = new float[N*M]; // start matrix
     float* Gt = new float[M*N]; // transpose of G
@@ -182,17 +228,9 @@ int main()
     srand(time(NULL));
 
     for(int i = 0; i < N * M; i ++)
-        G[i] = rand() % 20;
+        G[i] = i+1;
+        //G[i] = rand() % 2;
 
-    // G[0] = 1;
-    // G[1] = 2;
-    // G[2] = 3;
-    // G[3] = 4;
-    // G[4] = 5;
-    // G[5] = 6;
-    // G[6] = 7;
-    // G[7] = 8;
-    // G[8] = 9;
     
     cout << "\n----- G -----\n";
     display<float>(G, N, M);
@@ -206,46 +244,45 @@ int main()
     display(A, M, M);
 
     cout << "\n----- S -----\n";
-    cholesky_decomposition(A, S, M);
-    display(S, M, M);
-
-    int drop = drop_zero_column(S, L, M);
-
-    cout << "\n----- L("<< drop << " columns dropped) -----\n";
-    display(L, M, M-drop);
+    int rank = full_rank_cholesky_decomposition(A, S, M);
+    display(S, M, rank);
+    
+    cout << "\n----- L("<< M-rank << " columns dropped) -----\n";    
+    drop_zero_column(S, L, M, rank);
+    display(L, M, rank);
 
     cout <<"\n----- Lt -----\n";
-    transpose(L, Lt, M, M-drop);
-    display(Lt, M-drop, M);
+    transpose(L, Lt, M, rank);
+    display(Lt, rank, M);
 
     cout << "\n----- Lt * L ----- \n";
-    multiply(Lt, M-drop, M, L, M, M-drop, Lt_L);
-    display(Lt_L, M-drop, M-drop);
+    multiply(Lt, rank, M, L, M, rank, Lt_L);
+    display(Lt_L, rank, rank);
 
     cout << "\n----- I -----\n";
-    inverse(Lt_L, I, M-drop);
-    display(I, M-drop, M-drop);
+    inverse(Lt_L, I, rank);
+    display(I, rank, rank);
 
     cout << "\n----- Y -----\n";
     float* tmp = new float[M*M];
     float* tmp1 = new float[M*M];
     float* tmp2 = new float[M*M];
-    multiply(L, M, M-drop, I, M-drop, M-drop, tmp);
-    multiply(tmp, M, M-drop, I, M-drop, M-drop, tmp1);
-    multiply(tmp1, M, M-drop, Lt, M-drop, M, tmp2); 
+    multiply(L, M, rank, I, rank, rank, tmp);
+    multiply(tmp, M, rank, I, rank, rank, tmp1);
+    multiply(tmp1, M, rank, Lt, rank, M, tmp2); 
     multiply(tmp2, M, M, Gt, M, N, Y);
     display(Y, M, N);
 
-    free(G);
-    free(Gt);
-    free(A);
-    free(Y);
-    free(I);
-    free(S);
-    free(Lt_L);
-    free(tmp);
-    free(tmp1);
-    free(tmp2);
+    delete G;
+    delete Gt;
+    delete A;
+    delete Y;
+    delete I;
+    delete S;
+    delete Lt_L;
+    delete tmp;
+    delete tmp1;
+    delete tmp2;
 
     return 0;
 }
