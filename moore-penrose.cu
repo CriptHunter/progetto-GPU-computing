@@ -3,6 +3,7 @@
 #include <time.h>
 #include <cmath>
 #include <cstring>
+#include <time.h>
 using namespace std;
  
 // C++ program to calculate Moore-Penrose inverse matrix
@@ -152,7 +153,8 @@ void cholesky_decomposition(float* matrix, float* lower, int n) {
 float* submatrix(float* A, int n, int m, int row_start, int row_end, int col_start, int col_end) {
     int n_rows = row_end - row_start + 1;
     int n_cols = col_end - col_start + 1;
-    float* sub = new float[n_rows*n_cols];
+    //float* sub = new float[n_rows*n_cols];
+    float* sub = (float*) malloc(n_rows*n_cols*sizeof(float));
 
     int k = 0;
     for(int i = row_start; i <= row_end; i++)
@@ -180,10 +182,17 @@ int full_rank_cholesky_decomposition(float* A, float* L, int n) {
             float* d = new float[(n-k)*1];
             multiply(b, n-k, r-1, ct, r-1, 1, d);
             subtract(a, d, n-k, 1);
+
+            free(b);
+            free(c);
+            free(ct);
+            free(d);
         }
 
         for(int i = k; i < n; i++)
             L[i*n + r-1] = a[i-k];
+        
+        free(a);
 
         if(L[k*n + r-1] > tol) {
             L[k*n + r-1] = sqrt(L[k*n + r-1]);
@@ -213,24 +222,32 @@ void drop_zero_column(float* a, float* b, int n, int rank) {
 int main()
 {
     int N = 6; // number of rows
-    int M = 3; // number of columns
+    int M = 4; // number of columns
 
-    float* G = new float[N*M]; // start matrix
-    float* Gt = new float[M*N]; // transpose of G
-    float* A = new float[M*M]; // Gt * G
-    float* S = new float[M*M]; // lower triangular of A
-    float* L = new float[M*M]; // lower triangular with zero columns dropped
-    float* Lt = new float[M*M]; // upper triangular with zero rows dropped
-    float* Lt_L = new float[M*M]; // Lt * L
-    float* I = new float[M*M]; // inverse of Lt * L
-    float* Y = new float[M*N]; // pseudoinverse
+    float* G    = (float *) malloc(N*M*sizeof(float)); // start matrix
+    float* Gt   = (float *) malloc(M*N*sizeof(float)); // transpose of G
+    float* A    = (float *) malloc(M*M*sizeof(float)); // Gt * G
+    float* S    = (float *) malloc(M*M*sizeof(float)); // lower triangular of A
+    float* L    = (float *) malloc(M*M*sizeof(float)); // lower triangular with zero columns dropped
+    float* Lt   = (float *) malloc(M*M*sizeof(float)); // upper triangular with zero rows dropped
+    float* Lt_L = (float *) malloc(M*M*sizeof(float)); // Lt * L
+    float* I    = (float *) malloc(M*M*sizeof(float)); // inverse of Lt * L
+    float* Y    = (float *) malloc(M*N*sizeof(float)); // pseudoinverse
 
     srand(time(NULL));
 
-    for(int i = 0; i < N * M; i ++)
-        G[i] = i+1;
-        //G[i] = rand() % 2;
+    FILE *f = fopen("matrix.txt", "w");
+    for(int i = 0; i < N; i++) {
+        for(int j = 0; j < M; j++) {
+            G[i*M + j] = i*M + j;
+            fprintf(f, "%f\t", G[i*M + j]);
+        }
+        fprintf(f, "\n");
+    }
+    fclose(f);
 
+    time_t start, end;
+    time(&start); 
     
     cout << "\n----- G -----\n";
     display<float>(G, N, M);
@@ -245,7 +262,7 @@ int main()
 
     cout << "\n----- S -----\n";
     int rank = full_rank_cholesky_decomposition(A, S, M);
-    display(S, M, rank);
+    display(S, M, M);
     
     cout << "\n----- L("<< M-rank << " columns dropped) -----\n";    
     drop_zero_column(S, L, M, rank);
@@ -273,16 +290,28 @@ int main()
     multiply(tmp2, M, M, Gt, M, N, Y);
     display(Y, M, N);
 
-    delete G;
-    delete Gt;
-    delete A;
-    delete Y;
-    delete I;
-    delete S;
-    delete Lt_L;
-    delete tmp;
-    delete tmp1;
-    delete tmp2;
+    time(&end);
+    cout << "\nMoore-Penrose pseudoinverse calculation time: " << (double)(end-start) << " seconds" << endl;
+
+    FILE *f1 = fopen("pseudoinverse.txt", "w");
+    for(int i = 0; i < M; i++) {
+        for(int j = 0; j < N; j++) {
+            fprintf(f1, "%f\t", Y[i*M + j]);
+        }
+        fprintf(f1, "\n");
+    }
+    fclose(f1);
+
+    free(G);
+    free(Gt);
+    free(A);
+    free(Y);
+    free(I);
+    free(S);
+    free(Lt_L);
+    free(tmp);
+    free(tmp1);
+    free(tmp2);
 
     return 0;
 }
