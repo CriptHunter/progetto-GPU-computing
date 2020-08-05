@@ -25,7 +25,7 @@ void display_1D(T* a) {
 }
 
 //transpose a N*M matrix
-void transpose(float *a, float *a_t, int row, int col) {
+void transpose(double *a, double *a_t, int row, int col) {
     int k = 0;
     for (int i = 0; i < col; i++) {
         for (int j = 0; j < row; j++) {
@@ -35,13 +35,13 @@ void transpose(float *a, float *a_t, int row, int col) {
 }
  
 //multiply two matrix
-void multiply(float *a, int row1, int col1, float *b, int row2, int col2, float* matrix_mult) {
+void multiply(double *a, int row1, int col1, double *b, int row2, int col2, double* matrix_mult) {
     if(col1 != row2)
         cout << "dimensione colonna 1 diversa da dimensione riga 2!\n";
 
     for (int i = 0; i < row1; i++) {
         for (int j = 0; j < col2; j++) {
-            float sum = 0;
+            double sum = 0;
             for (int k = 0; k < col1; k++)
                 sum = sum + a[i * col1 + k] * b[k * col2 + j];
             matrix_mult[i * col2 + j] = sum;
@@ -49,19 +49,19 @@ void multiply(float *a, int row1, int col1, float *b, int row2, int col2, float*
     }
 }
 
-void subtract(float* a, float* b, int row, int col) {
+void subtract(double* a, double* b, int row, int col) {
     for(int i = 0; i < row*col; i++) {
 
-        if(a[i] - b[i] < 1E-7)
+        if(a[i] - b[i] < 1E-7 && a[i] - b[i] >= 0)
             a[i] = 0;
         else
             a[i] = a[i] - b[i];
-        
+
     }
 }
  
 // Initializing identity matrix with 1 on diagonal
-void init_identity(float* a, int n) {
+void init_identity(double* a, int n) {
     for(int i = 0; i < n; ++i) {
         for(int j = 0; j < n; ++j) {
             if(j == (i))
@@ -74,8 +74,8 @@ void init_identity(float* a, int n) {
 }
 
 //partial pivoting using element one of each row
-void pivot_matrix(float* matrix, float* inverse, int n) {
-    float d = 0.0;
+void pivot_matrix(double* matrix, double* inverse, int n) {
+    double d = 0.0;
     for(int i = n; i > 1; i--) {
         if(matrix[(i-1)*n + 1] < matrix[i*n + 1])
             for(int j = 0; j < n; j++) {
@@ -91,8 +91,8 @@ void pivot_matrix(float* matrix, float* inverse, int n) {
 }
 
 //reduce the matrix to a diagonal one (values outside diagonal are 0)
-void diagonal_reduce(float* matrix, float* inverse, int n) {
-    float d = 0.0;
+void diagonal_reduce(double* matrix, double* inverse, int n) {
+    double d = 0.0;
     for(int i = 0; i < n; i++) {
         for(int j = 0; j < n; j++) {
             if(j != i) {
@@ -107,8 +107,8 @@ void diagonal_reduce(float* matrix, float* inverse, int n) {
 }
 
 //reduce the matrix to identity obtaining the inverse in the second matrix
-void identity_reduce(float* matrix, float* inverse, int n) {
-    float d = 0.0;
+void identity_reduce(double* matrix, double* inverse, int n) {
+    double d = 0.0;
     for(int i = 0; i < n; i++) {
         d = matrix[i*n + i];
             for(int j = 0; j < n; j++) {
@@ -118,7 +118,7 @@ void identity_reduce(float* matrix, float* inverse, int n) {
     }
 }
 
-void inverse(float* matrix, float* inverse, int n) {
+void inverse(double* matrix, double* inverse, int n) {
     init_identity(inverse, n);
     pivot_matrix(matrix, inverse, n);
     diagonal_reduce(matrix, inverse, n);
@@ -126,13 +126,13 @@ void inverse(float* matrix, float* inverse, int n) {
 }
 
 // return the lower triangular matrix of a symmetric matrix
-void cholesky_decomposition(float* matrix, float* lower, int n) { 
+void cholesky_decomposition(double* matrix, double* lower, int n) { 
     memset(lower, 0, sizeof(n));
   
     // Decomposing a matrix into Lower Triangular 
     for (int i = 0; i < n; i++) { 
         for (int j = 0; j <= i; j++) { 
-            float sum = 0.0; 
+            double sum = 0.0; 
   
             if (j == i) { 
                 for (int k = 0; k < j; k++) 
@@ -150,11 +150,11 @@ void cholesky_decomposition(float* matrix, float* lower, int n) {
 }
 
 //return a submatrix given rows and columns indices
-float* submatrix(float* A, int n, int m, int row_start, int row_end, int col_start, int col_end) {
+double* submatrix(double* A, int n, int m, int row_start, int row_end, int col_start, int col_end) {
     int n_rows = row_end - row_start + 1;
     int n_cols = col_end - col_start + 1;
-    //float* sub = new float[n_rows*n_cols];
-    float* sub = (float*) malloc(n_rows*n_cols*sizeof(float));
+    //double* sub = new double[n_rows*n_cols];
+    double* sub = (double*) malloc(n_rows*n_cols*sizeof(double));
 
     int k = 0;
     for(int i = row_start; i <= row_end; i++)
@@ -165,23 +165,48 @@ float* submatrix(float* A, int n, int m, int row_start, int row_end, int col_sta
     return sub;
 }
 
-int full_rank_cholesky_decomposition(float* A, float* L, int n) {
-    float tol = 1E-9;
+int full_rank_cholesky_decomposition(double* A, double* L, int n) {
+    double tol = A[0];
+    for(int i = 0; i < n; i++) {
+        double k = A[i*n + i];
+        if(k < tol)
+            tol = k;
+    }
+    tol = tol * 1E-9;
+
     int r = 0;
 
     for(int k = 0; k < n; k++) {
         r = r+1;
+
+        cout << "RANK = " << r << endl;
       
-        float* a = submatrix(A, n, n, k, n-1, k, k);
+        double* a = submatrix(A, n, n, k, n-1, k, k);
 
         if(r-2 >= 0) {
-            float* b = submatrix(L, n, n, k, n-1, 0, r-2);
-            float* c = submatrix(L, n, n, k, k, 0, r-2);
-            float* ct = new float[r-1];
+            double* b = submatrix(L, n, n, k, n-1, 0, r-2);
+            double* c = submatrix(L, n, n, k, k, 0, r-2);
+            double* ct = new double[r-1];
             transpose(c, ct, 1, r-1);
-            float* d = new float[(n-k)*1];
+            double* d = new double[(n-k)*1];
             multiply(b, n-k, r-1, ct, r-1, 1, d);
             subtract(a, d, n-k, 1);
+
+            /*cout << "matrix A: " << endl;
+            display(a, n-k, r-1);
+            cout << endl;
+            cout << "matrix B: " << endl;
+            display(b, n-k, r-1);
+            cout << endl;
+            cout << "matrix C " << endl;
+            display(c, 1, r-1);
+            cout << endl;
+            cout << "matrix Ct: " << endl;
+            display(ct, r-1, 1);
+            cout << endl;
+            cout << "matrix D: " << endl;
+            display(d, n-k, 1);
+            cout << endl;*/
 
             free(b);
             free(c);
@@ -193,6 +218,9 @@ int full_rank_cholesky_decomposition(float* A, float* L, int n) {
             L[i*n + r-1] = a[i-k];
         
         free(a);
+
+        cout << "TOL: " << tol << endl;
+        cout << "VALUE: " << L[k*n + r-1] << endl;
 
         if(L[k*n + r-1] > tol) {
             L[k*n + r-1] = sqrt(L[k*n + r-1]);
@@ -206,10 +234,9 @@ int full_rank_cholesky_decomposition(float* A, float* L, int n) {
     }
 
     return r;
-
 }
 
-void drop_zero_column(float* a, float* b, int n, int rank) {
+void drop_zero_column(double* a, double* b, int n, int rank) {
     int k = 0;
     for(int i = 0; i < n; i++)
         for(int j = 0; j < rank; j++) {
@@ -221,25 +248,26 @@ void drop_zero_column(float* a, float* b, int n, int rank) {
 // Driver program
 int main()
 {
-    int N = 6; // number of rows
-    int M = 4; // number of columns
+    int N = 20; // number of rows
+    int M = 8; // number of columns
 
-    float* G    = (float *) malloc(N*M*sizeof(float)); // start matrix
-    float* Gt   = (float *) malloc(M*N*sizeof(float)); // transpose of G
-    float* A    = (float *) malloc(M*M*sizeof(float)); // Gt * G
-    float* S    = (float *) malloc(M*M*sizeof(float)); // lower triangular of A
-    float* L    = (float *) malloc(M*M*sizeof(float)); // lower triangular with zero columns dropped
-    float* Lt   = (float *) malloc(M*M*sizeof(float)); // upper triangular with zero rows dropped
-    float* Lt_L = (float *) malloc(M*M*sizeof(float)); // Lt * L
-    float* I    = (float *) malloc(M*M*sizeof(float)); // inverse of Lt * L
-    float* Y    = (float *) malloc(M*N*sizeof(float)); // pseudoinverse
+    double* G    = (double *) malloc(N*M*sizeof(double)); // start matrix
+    double* Gt   = (double *) malloc(M*N*sizeof(double)); // transpose of G
+    double* A    = (double *) malloc(M*M*sizeof(double)); // Gt * G
+    double* S    = (double *) malloc(M*M*sizeof(double)); // lower triangular of A
+    double* L    = (double *) malloc(M*M*sizeof(double)); // lower triangular with zero columns dropped
+    double* Lt   = (double *) malloc(M*M*sizeof(double)); // upper triangular with zero rows dropped
+    double* Lt_L = (double *) malloc(M*M*sizeof(double)); // Lt * L
+    double* I    = (double *) malloc(M*M*sizeof(double)); // inverse of Lt * L
+    double* Y    = (double *) malloc(M*N*sizeof(double)); // pseudoinverse
 
     srand(time(NULL));
 
     FILE *f = fopen("matrix.txt", "w");
     for(int i = 0; i < N; i++) {
         for(int j = 0; j < M; j++) {
-            G[i*M + j] = i*M + j;
+            G[i*M + j] = i*M + j + 10;
+            //G[i*M + j] = rand() % 50;
             fprintf(f, "%f\t", G[i*M + j]);
         }
         fprintf(f, "\n");
@@ -250,11 +278,11 @@ int main()
     time(&start); 
     
     cout << "\n----- G -----\n";
-    display<float>(G, N, M);
+    display<double>(G, N, M);
 
     cout << "\n----- Gt -----\n";
     transpose(G, Gt, N, M);
-    display<float>(Gt, M, N);
+    display<double>(Gt, M, N);
 
     cout << "\n----- A -----\n";
     multiply(Gt, M, N, G, N, M, A); 
@@ -281,9 +309,9 @@ int main()
     display(I, rank, rank);
 
     cout << "\n----- Y -----\n";
-    float* tmp = new float[M*M];
-    float* tmp1 = new float[M*M];
-    float* tmp2 = new float[M*M];
+    double* tmp = new double[M*M];
+    double* tmp1 = new double[M*M];
+    double* tmp2 = new double[M*M];
     multiply(L, M, rank, I, rank, rank, tmp);
     multiply(tmp, M, rank, I, rank, rank, tmp1);
     multiply(tmp1, M, rank, Lt, rank, M, tmp2); 
@@ -296,7 +324,7 @@ int main()
     FILE *f1 = fopen("pseudoinverse.txt", "w");
     for(int i = 0; i < M; i++) {
         for(int j = 0; j < N; j++) {
-            fprintf(f1, "%f\t", Y[i*M + j]);
+            fprintf(f1, "%f\t", Y[i*N + j]);
         }
         fprintf(f1, "\n");
     }
@@ -308,6 +336,8 @@ int main()
     free(Y);
     free(I);
     free(S);
+    free(L);
+    free(Lt);
     free(Lt_L);
     free(tmp);
     free(tmp1);
