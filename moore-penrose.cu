@@ -179,8 +179,6 @@ int full_rank_cholesky_decomposition(double* A, double* L, int n) {
     for(int k = 0; k < n; k++) {
         r = r+1;
 
-        cout << "RANK = " << r << endl;
-      
         double* a = submatrix(A, n, n, k, n-1, k, k);
 
         if(r-2 >= 0) {
@@ -219,9 +217,6 @@ int full_rank_cholesky_decomposition(double* A, double* L, int n) {
         
         free(a);
 
-        cout << "TOL: " << tol << endl;
-        cout << "VALUE: " << L[k*n + r-1] << endl;
-
         if(L[k*n + r-1] > tol) {
             L[k*n + r-1] = sqrt(L[k*n + r-1]);
 
@@ -246,12 +241,8 @@ void drop_zero_column(double* a, double* b, int n, int rank) {
 }
 
 // Driver program
-int main()
+void geninv(double* G, double* Y, int N, int M)
 {
-    int N = 20; // number of rows
-    int M = 8; // number of columns
-
-    double* G    = (double *) malloc(N*M*sizeof(double)); // start matrix
     double* Gt   = (double *) malloc(M*N*sizeof(double)); // transpose of G
     double* A    = (double *) malloc(M*M*sizeof(double)); // Gt * G
     double* S    = (double *) malloc(M*M*sizeof(double)); // lower triangular of A
@@ -259,20 +250,6 @@ int main()
     double* Lt   = (double *) malloc(M*M*sizeof(double)); // upper triangular with zero rows dropped
     double* Lt_L = (double *) malloc(M*M*sizeof(double)); // Lt * L
     double* I    = (double *) malloc(M*M*sizeof(double)); // inverse of Lt * L
-    double* Y    = (double *) malloc(M*N*sizeof(double)); // pseudoinverse
-
-    srand(time(NULL));
-
-    FILE *f = fopen("matrix.txt", "w");
-    for(int i = 0; i < N; i++) {
-        for(int j = 0; j < M; j++) {
-            G[i*M + j] = i*M + j + 10;
-            //G[i*M + j] = rand() % 50;
-            fprintf(f, "%f\t", G[i*M + j]);
-        }
-        fprintf(f, "\n");
-    }
-    fclose(f);
 
     time_t start, end;
     time(&start); 
@@ -319,7 +296,40 @@ int main()
     display(Y, M, N);
 
     time(&end);
-    cout << "\nMoore-Penrose pseudoinverse calculation time: " << (double)(end-start) << " seconds" << endl;
+    cout << "\nMoore-Penrose pseudoinverse calculation time on CPU: " << (double)(end-start) << " seconds" << endl;
+
+    free(Gt);
+    free(A);
+    free(I);
+    free(S);
+    free(L);
+    free(Lt);
+    free(Lt_L);
+    free(tmp);
+    free(tmp1);
+    free(tmp2);
+}
+
+int main() {
+    int N = 100;
+    int M = 80;
+
+    double* G    = (double *) malloc(N*M*sizeof(double)); // start matrix
+    double* Y    = (double *) malloc(M*N*sizeof(double)); // pseudoinverse
+
+    srand(time(NULL));
+    FILE *f = fopen("matrix.txt", "w");
+    for(int i = 0; i < N; i++) {
+        for(int j = 0; j < M; j++) {
+            //G[i*M + j] = i*M + j;
+            G[i*M + j] = rand() % 50;
+            fprintf(f, "%f\t", G[i*M + j]);
+        }
+        fprintf(f, "\n");
+    }
+    fclose(f);
+
+    geninv(G, Y, N, M);
 
     FILE *f1 = fopen("pseudoinverse.txt", "w");
     for(int i = 0; i < M; i++) {
@@ -331,17 +341,5 @@ int main()
     fclose(f1);
 
     free(G);
-    free(Gt);
-    free(A);
     free(Y);
-    free(I);
-    free(S);
-    free(L);
-    free(Lt);
-    free(Lt_L);
-    free(tmp);
-    free(tmp1);
-    free(tmp2);
-
-    return 0;
 }
