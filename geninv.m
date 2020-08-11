@@ -1,16 +1,7 @@
 function Y = geninv(G)
 
-m = 10;
-n = 5;
-
-G = zeros(m,n);
-for i = 1:m 
-    for j = 1:n
-        G(i, j) = (i-1)*n + j -1;
-    end
-end
-
 G = dlmread('matrix.txt')
+[m,n] = size(G);
 
 % Returns the Moore-Penrose inverse of the argument
  % Transpose if m < n

@@ -184,9 +184,9 @@ int full_rank_cholesky_decomposition(double* A, double* L, int n) {
         if(r-2 >= 0) {
             double* b = submatrix(L, n, n, k, n-1, 0, r-2);
             double* c = submatrix(L, n, n, k, k, 0, r-2);
-            double* ct = new double[r-1];
+            double* ct = (double*) malloc((r-1)*sizeof(double));
             transpose(c, ct, 1, r-1);
-            double* d = new double[(n-k)*1];
+            double* d = (double*) malloc((n-k)*sizeof(double));
             multiply(b, n-k, r-1, ct, r-1, 1, d);
             subtract(a, d, n-k, 1);
 
@@ -240,60 +240,71 @@ void drop_zero_column(double* a, double* b, int n, int rank) {
         }    
 }
 
-// Driver program
 void geninv(double* G, double* Y, int N, int M)
 {
-    double* Gt   = (double *) malloc(M*N*sizeof(double)); // transpose of G
-    double* A    = (double *) malloc(M*M*sizeof(double)); // Gt * G
-    double* S    = (double *) malloc(M*M*sizeof(double)); // lower triangular of A
-    double* L    = (double *) malloc(M*M*sizeof(double)); // lower triangular with zero columns dropped
-    double* Lt   = (double *) malloc(M*M*sizeof(double)); // upper triangular with zero rows dropped
-    double* Lt_L = (double *) malloc(M*M*sizeof(double)); // Lt * L
-    double* I    = (double *) malloc(M*M*sizeof(double)); // inverse of Lt * L
+    int old_M = M;
+    bool transposed = false;
+    double* Gt = (double *) malloc(M*N*sizeof(double)); // transpose of G
+    double* A; // Gt * G
+    double* S; // lower triangular of A
+    double* L; // lower triangular with zero columns dropped
+    double* Lt; // upper triangular with zero rows dropped
+    double* Lt_L; // Lt * L
+    double* I; // inverse of Lt * L
 
     time_t start, end;
     time(&start); 
     
-    cout << "\n----- G -----\n";
-    display<double>(G, N, M);
+    transpose(G, Gt, N, M); // transpose G in Gt
 
-    cout << "\n----- Gt -----\n";
-    transpose(G, Gt, N, M);
-    display<double>(Gt, M, N);
+    if(N < M) {
+        transposed = true;
+        M = N;
+    }
 
-    cout << "\n----- A -----\n";
-    multiply(Gt, M, N, G, N, M, A); 
-    display(A, M, M);
+    A    = (double *) malloc(M*M*sizeof(double)); // Gt * G
+    S    = (double *) malloc(M*M*sizeof(double)); // lower triangular of A
+    L    = (double *) malloc(M*M*sizeof(double)); // lower triangular with zero columns dropped
+    Lt   = (double *) malloc(M*M*sizeof(double)); // upper triangular with zero rows dropped
+    Lt_L = (double *) malloc(M*M*sizeof(double)); // Lt * L
+    I    = (double *) malloc(M*M*sizeof(double)); // inverse of Lt * L
 
-    cout << "\n----- S -----\n";
-    int rank = full_rank_cholesky_decomposition(A, S, M);
-    display(S, M, M);
-    
-    cout << "\n----- L("<< M-rank << " columns dropped) -----\n";    
-    drop_zero_column(S, L, M, rank);
-    display(L, M, rank);
+    if(transposed)
+        multiply(G, N, old_M, Gt, old_M, N, A); // A = G * Gt 
+    else
+        multiply(Gt, old_M, N, G, N, old_M, A); // A = Gt * G
 
-    cout <<"\n----- Lt -----\n";
+    int rank = full_rank_cholesky_decomposition(A, S, M); // S = cholesky(A)
+    drop_zero_column(S, L, M, rank); // L = S without zero columns
     transpose(L, Lt, M, rank);
-    display(Lt, rank, M);
+    multiply(Lt, rank, M, L, M, rank, Lt_L); // Lt_L = Lt * L
 
-    cout << "\n----- Lt * L ----- \n";
-    multiply(Lt, rank, M, L, M, rank, Lt_L);
-    display(Lt_L, rank, rank);
+    inverse(Lt_L, I, rank); // I = inverse(Lt_L)
 
-    cout << "\n----- I -----\n";
-    inverse(Lt_L, I, rank);
-    display(I, rank, rank);
+    double* tmp;
+    double* tmp1; 
+    double* tmp2;
 
-    cout << "\n----- Y -----\n";
-    double* tmp = new double[M*M];
-    double* tmp1 = new double[M*M];
-    double* tmp2 = new double[M*M];
-    multiply(L, M, rank, I, rank, rank, tmp);
-    multiply(tmp, M, rank, I, rank, rank, tmp1);
-    multiply(tmp1, M, rank, Lt, rank, M, tmp2); 
-    multiply(tmp2, M, M, Gt, M, N, Y);
-    display(Y, M, N);
+    if(transposed) { // Y = Gt * L * I * I * Lt
+        tmp =  (double *) malloc(old_M*rank*sizeof(double));
+        tmp1 = (double *) malloc(old_M*rank*sizeof(double));
+        tmp2 = (double *) malloc(old_M*rank*sizeof(double));
+
+        multiply(Gt, old_M, N, L, N, rank, tmp);
+        multiply(tmp, old_M, rank, I, rank, rank, tmp1);
+        multiply(tmp1, old_M, rank, I, rank, rank, tmp2);
+        multiply(tmp2, old_M, rank, Lt, rank, N, Y);
+    }
+    else { // Y = L * I * I * Lt * Gt
+        tmp =  (double *) malloc(old_M*rank*sizeof(double));
+        tmp1 = (double *) malloc(old_M*rank*sizeof(double));
+        tmp2 = (double *) malloc(old_M*old_M*sizeof(double));
+
+        multiply(L, M, rank, I, rank, rank, tmp);
+        multiply(tmp, M, rank, I, rank, rank, tmp1);
+        multiply(tmp1, M, rank, Lt, rank, M, tmp2); 
+        multiply(tmp2, M, M, Gt, M, N, Y);
+    }
 
     time(&end);
     cout << "\nMoore-Penrose pseudoinverse calculation time on CPU: " << (double)(end-start) << " seconds" << endl;
@@ -310,36 +321,128 @@ void geninv(double* G, double* Y, int N, int M)
     free(tmp2);
 }
 
-int main() {
-    int N = 100;
-    int M = 80;
+void geninv_verbose(double* G, double* Y, int N, int M)
+{
+    int old_M = M;
+    bool transposed = false;
+    double* Gt = (double *) malloc(M*N*sizeof(double)); // transpose of G
+    double* A; // Gt * G
+    double* S; // lower triangular of A
+    double* L; // lower triangular with zero columns dropped
+    double* Lt; // upper triangular with zero rows dropped
+    double* Lt_L; // Lt * L
+    double* I; // inverse of Lt * L
 
-    double* G    = (double *) malloc(N*M*sizeof(double)); // start matrix
-    double* Y    = (double *) malloc(M*N*sizeof(double)); // pseudoinverse
+    time_t start, end;
+    time(&start); 
+    
+    cout << "\n----- G -----\n";
+    display<double>(G, N, M);
 
+    cout << "\n----- Gt -----\n";
+    transpose(G, Gt, N, M); // transpose G in Gt
+    display<double>(Gt, M, N);
+
+    if(N < M) {
+        transposed = true;
+        M = N;
+    }
+
+    A    = (double *) malloc(M*M*sizeof(double)); // Gt * G
+    S    = (double *) malloc(M*M*sizeof(double)); // lower triangular of A
+    L    = (double *) malloc(M*M*sizeof(double)); // lower triangular with zero columns dropped
+    Lt   = (double *) malloc(M*M*sizeof(double)); // upper triangular with zero rows dropped
+    Lt_L = (double *) malloc(M*M*sizeof(double)); // Lt * L
+    I    = (double *) malloc(M*M*sizeof(double)); // inverse of Lt * L
+
+    cout << "\n----- A -----\n";
+    if(transposed)
+        multiply(G, N, old_M, Gt, old_M, N, A); // A = G * Gt 
+    else
+        multiply(Gt, old_M, N, G, N, old_M, A); // A = Gt * G
+
+    display(A, M, M);
+
+    cout << "\n----- S -----\n";
+    int rank = full_rank_cholesky_decomposition(A, S, M); // S = cholesky(A)
+    display(S, M, M);
+    
+    cout << "\n----- L("<< M-rank << " columns dropped) -----\n";    
+    drop_zero_column(S, L, M, rank); // L = S without zero columns
+    display(L, M, rank);
+
+    cout <<"\n----- Lt -----\n";
+    transpose(L, Lt, M, rank);
+    display(Lt, rank, M);
+
+    cout << "\n----- Lt * L ----- \n";
+    multiply(Lt, rank, M, L, M, rank, Lt_L); // Lt_L = Lt * L
+    display(Lt_L, rank, rank);
+
+    cout << "\n----- I -----\n";
+    inverse(Lt_L, I, rank); // I = inverse(Lt_L)
+    display(I, rank, rank);
+
+    cout << "\n----- Y -----\n";
+    double* tmp;
+    double* tmp1; 
+    double* tmp2;
+
+    if(transposed) { // Y = Gt * L * I * I * Lt
+        tmp =  (double *) malloc(old_M*rank*sizeof(double));
+        tmp1 = (double *) malloc(old_M*rank*sizeof(double));
+        tmp2 = (double *) malloc(old_M*rank*sizeof(double));
+
+        multiply(Gt, old_M, N, L, N, rank, tmp);
+        multiply(tmp, old_M, rank, I, rank, rank, tmp1);
+        multiply(tmp1, old_M, rank, I, rank, rank, tmp2);
+        multiply(tmp2, old_M, rank, Lt, rank, N, Y);
+    }
+    else { // Y = L * I * I * Lt * Gt
+        tmp =  (double *) malloc(old_M*rank*sizeof(double));
+        tmp1 = (double *) malloc(old_M*rank*sizeof(double));
+        tmp2 = (double *) malloc(old_M*old_M*sizeof(double));
+
+        multiply(L, M, rank, I, rank, rank, tmp);
+        multiply(tmp, M, rank, I, rank, rank, tmp1);
+        multiply(tmp1, M, rank, Lt, rank, M, tmp2); 
+        multiply(tmp2, M, M, Gt, M, N, Y);
+    }
+
+    display(Y, old_M, N);
+
+    time(&end);
+    cout << "\nMoore-Penrose pseudoinverse calculation time on CPU: " << (double)(end-start) << " seconds" << endl;
+
+    free(Gt);
+    free(A);
+    free(I);
+    free(S);
+    free(L);
+    free(Lt);
+    free(Lt_L);
+    free(tmp);
+    free(tmp1);
+    free(tmp2);
+}
+
+void random_matrix(double* G, int N, int M) {
     srand(time(NULL));
-    FILE *f = fopen("matrix.txt", "w");
-    for(int i = 0; i < N; i++) {
-        for(int j = 0; j < M; j++) {
+    for(int i = 0; i < N; i++)
+        for(int j = 0; j < M; j++)
+            G[i*M + j] = rand() % 20;
             //G[i*M + j] = i*M + j;
-            G[i*M + j] = rand() % 50;
+}
+
+void printf_matrix(double* G, int N, int M, const char* filename) {
+    FILE *f = fopen(filename, "w");
+    for(int i = 0; i < N; i++) {
+        for(int j = 0; j < M; j++)
             fprintf(f, "%f\t", G[i*M + j]);
-        }
         fprintf(f, "\n");
     }
     fclose(f);
-
-    geninv(G, Y, N, M);
-
-    FILE *f1 = fopen("pseudoinverse.txt", "w");
-    for(int i = 0; i < M; i++) {
-        for(int j = 0; j < N; j++) {
-            fprintf(f1, "%f\t", Y[i*N + j]);
-        }
-        fprintf(f1, "\n");
-    }
-    fclose(f1);
-
-    free(G);
-    free(Y);
 }
+
+
+
