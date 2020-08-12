@@ -1,12 +1,21 @@
+// C++ program to calculate Moore-Penrose inverse matrix
+
 #include <iostream>
 #include <cstdlib>
 #include <time.h>
 #include <cmath>
 #include <cstring>
 #include <time.h>
+#include <sys/time.h>
 using namespace std;
  
-// C++ program to calculate Moore-Penrose inverse matrix
+inline double seconds() {
+    struct timeval tp;
+    struct timezone tzp;
+    int i = gettimeofday(&tp, &tzp);
+    return ((double)tp.tv_sec + (double)tp.tv_usec * 1.e-6);
+}
+
 
 template<class T>
 void display(T *a, int row, int col) {
@@ -34,7 +43,7 @@ void transpose(double *a, double *a_t, int row, int col) {
     }
 }
  
-//multiply two matrix
+//product of two matrix
 void multiply(double *a, int row1, int col1, double *b, int row2, int col2, double* matrix_mult) {
     if(col1 != row2)
         cout << "dimensione colonna 1 diversa da dimensione riga 2!\n";
@@ -252,8 +261,7 @@ void geninv(double* G, double* Y, int N, int M)
     double* Lt_L; // Lt * L
     double* I; // inverse of Lt * L
 
-    time_t start, end;
-    time(&start); 
+    double start = seconds();
     
     transpose(G, Gt, N, M); // transpose G in Gt
 
@@ -306,8 +314,8 @@ void geninv(double* G, double* Y, int N, int M)
         multiply(tmp2, M, M, Gt, M, N, Y);
     }
 
-    time(&end);
-    cout << "\nMoore-Penrose pseudoinverse calculation time on CPU: " << (double)(end-start) << " seconds" << endl;
+    double stop = seconds();
+    cout << "\nMoore-Penrose pseudoinverse calculation time on CPU: " << stop - start << " seconds" << endl;
 
     free(Gt);
     free(A);
