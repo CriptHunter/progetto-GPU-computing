@@ -1,13 +1,4 @@
 // C++ program to calculate Moore-Penrose inverse matrix
-
-#include <iostream>
-#include <cstdlib>
-#include <time.h>
-#include <cmath>
-#include <cstring>
-#include <time.h>
-#include <sys/time.h>
-using namespace std;
  
 inline double seconds() {
     struct timeval tp;
@@ -132,30 +123,6 @@ void inverse(double* matrix, double* inverse, int n) {
     pivot_matrix(matrix, inverse, n);
     diagonal_reduce(matrix, inverse, n);
     identity_reduce(matrix, inverse, n);
-}
-
-// return the lower triangular matrix of a symmetric matrix
-void cholesky_decomposition(double* matrix, double* lower, int n) { 
-    memset(lower, 0, sizeof(n));
-  
-    // Decomposing a matrix into Lower Triangular 
-    for (int i = 0; i < n; i++) { 
-        for (int j = 0; j <= i; j++) { 
-            double sum = 0.0; 
-  
-            if (j == i) { 
-                for (int k = 0; k < j; k++) 
-                    sum += pow(lower[j*n + k], 2); 
-                lower[j*n +j] = sqrt(matrix[j*n + j] - sum); 
-            } 
-        
-            else { 
-                for (int k = 0; k < j; k++) 
-                    sum += (lower[i*n + k] * lower[j*n + k]); 
-                    lower[i*n + j] = (matrix[i*n + j] - sum) / lower[j*n + j]; 
-            } 
-        } 
-    } 
 }
 
 //return a submatrix given rows and columns indices
