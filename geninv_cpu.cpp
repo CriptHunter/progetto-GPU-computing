@@ -129,7 +129,6 @@ void inverse(double* matrix, double* inverse, int n) {
 double* submatrix(double* A, int n, int m, int row_start, int row_end, int col_start, int col_end) {
     int n_rows = row_end - row_start + 1;
     int n_cols = col_end - col_start + 1;
-    //double* sub = new double[n_rows*n_cols];
     double* sub = (double*) malloc(n_rows*n_cols*sizeof(double));
 
     int k = 0;

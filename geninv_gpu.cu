@@ -73,6 +73,28 @@ __global__ void product_gpu(double* A, double* B, double* C, int N, int M, int P
 		C[row * M + col] = sum;
 }
 
+__global__ void subtract_gpu(double* a, double* b, int N, int M) {
+    uint row = blockIdx.y * blockDim.y + threadIdx.y;
+    uint col = blockIdx.x * blockDim.x + threadIdx.x;
+    if(row < N && col < M)
+        a[row*M + col] = a[row*M + col] - b[row*M + col];
+}
+
+__global__ void submatrix_gpu(double* A, double* B, int N, int M, int row_start, int row_end, int col_start, int col_end) {
+    uint n_rows = row_end - row_start + 1;
+    uint n_cols = col_end - col_start + 1;
+    uint row = blockIdx.y * blockDim.y + threadIdx.y;
+    uint col = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if(row >= row_start && row <= row_end && col >= col_start && col <= col_end) {
+        printf("A(%d) ---> B(%d)    row = %d    col = %d   val = %lf\n", row*M+col, 
+              (row-row_start)*n_cols+col-col_start, row, col, A[row*M+col]);
+        B[(row-row_start)*n_cols + col - col_start] = A[row*M + col];
+    }
+}
+
+
+
 void geninv_gpu(double* G, double* Y, int N, int M) {
     int old_M = M;
     bool transposed = false;
@@ -138,12 +160,12 @@ void geninv_gpu(double* G, double* Y, int N, int M) {
     else
         product_gpu<<<grid, block>>>(d_Gt, d_G, d_A, old_M, old_M, N); // // A = Gt * G 
     cudaDeviceSynchronize();
-
     cudaMemcpy(A, d_A, M*M*sizeof(double), cudaMemcpyDeviceToHost);
     
     cout << "\n----- A -----\n";
     display<double>(A, M, M);
 
+    
     double stop = seconds();
     cout << "\nMoore-Penrose pseudoinverse calculation time on GPU: " << stop - start << " seconds" << endl;
 

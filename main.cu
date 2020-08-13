@@ -19,9 +19,9 @@ int main() {
     double* Y = (double *) malloc(M*N*sizeof(double)); // pseudoinverse
 
     random_matrix(G, N, M);
-    printf_matrix(G, N, M, "matrix.txt");
-    geninv(G, Y, N, M);
-    printf_matrix(Y, M, N, "pseudoinverse_CPU.txt");
+    // printf_matrix(G, N, M, "matrix.txt");
+    // geninv(G, Y, N, M);
+    // printf_matrix(Y, M, N, "pseudoinverse_CPU.txt");
 
     geninv_gpu(G, Y, N, M);
 
