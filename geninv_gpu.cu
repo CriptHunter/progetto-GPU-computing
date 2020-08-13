@@ -81,7 +81,6 @@ __global__ void subtract_gpu(double* a, double* b, int N, int M) {
 }
 
 __global__ void submatrix_gpu(double* A, double* B, int N, int M, int row_start, int row_end, int col_start, int col_end) {
-    uint n_rows = row_end - row_start + 1;
     uint n_cols = col_end - col_start + 1;
     uint row = blockIdx.y * blockDim.y + threadIdx.y;
     uint col = blockIdx.x * blockDim.x + threadIdx.x;
@@ -93,7 +92,91 @@ __global__ void submatrix_gpu(double* A, double* B, int N, int M, int row_start,
     }
 }
 
+//calculate tollerance using diagonal of square matrix
+__global__ void tollerance(double*A, int N, double* tol) {
+    *tol = 900; // TODO!
+}
 
+int full_rank_cholesky_decomposition_gpu(double* A, double* L, int N, dim3 block, dim3 grid) {
+    double tol = A[0];
+
+    for(int i = 0; i < N; i++) {
+        double k = A[i*N + i];
+        if(k < tol)
+            tol = k;
+    }
+    tol = tol * 1E-9;
+
+    // double tol;
+    // double* d_tol;
+    // cudaMalloc(&d_tol, sizeof(double));
+    // tollerance<<<grid,block>>>(A, N, d_tol);
+    // cudaMemcpy(&tol, d_tol, sizeof(double), cudaMemcpyDeviceToHost); 
+
+    int r = 0;
+
+    for(int k = 0; k < N; k++) {
+        r = r+1;
+
+        double* a = (double*) malloc((N-k)*sizeof(double));
+        double* d_a;
+        cudaMalloc((void**) &d_a, (N-k)*sizeof(double));
+        submatrix_gpu<<<grid, block>>>(A, d_a, N, N, k, N-1, k, k);
+        cudaMemcpy(a, d_a, (N-k)*sizeof(double), cudaMemcpyDeviceToHost);
+
+        cout << "matrix A: " << endl;
+        display(a, N-k, 1);
+        cout << endl;
+
+        if(r-2 >= 0) {
+            double* b = submatrix(L, N, N, k, N-1, 0, r-2);
+            double* c = submatrix(L, N, N, k, k, 0, r-2);
+            double* ct = (double*) malloc((r-1)*sizeof(double));
+            transpose(c, ct, 1, r-1);
+            double* d = (double*) malloc((N-k)*sizeof(double));
+            multiply(b, N-k, r-1, ct, r-1, 1, d);
+            subtract(a, d, N-k, 1);
+
+            /*cout << "matrix A: " << endl;
+            display(a, N-k, r-1);
+            cout << endl;
+            cout << "matrix B: " << endl;
+            display(b, N-k, r-1);
+            cout << endl;
+            cout << "matrix C " << endl;
+            display(c, 1, r-1);
+            cout << endl;
+            cout << "matrix Ct: " << endl;
+            display(ct, r-1, 1);
+            cout << endl;
+            cout << "matrix D: " << endl;
+            display(d, N-k, 1);
+            cout << endl;*/
+
+            free(b);
+            free(c);
+            free(ct);
+            free(d);
+        }
+
+        for(int i = k; i < N; i++)
+            L[i*N + r-1] = a[i-k];
+        
+        free(a);
+
+        if(L[k*N + r-1] > tol) {
+            L[k*N + r-1] = sqrt(L[k*N + r-1]);
+
+            if (k+1 < N)
+                for(int i = k+1; i < N; i++)
+                    L[i*N + r-1] = L[i*N + r-1] / L[k*N + r-1]; 
+        }
+        else
+            r = r-1;
+    }
+
+    return r;
+}
 
 void geninv_gpu(double* G, double* Y, int N, int M) {
     int old_M = M;
@@ -165,7 +248,10 @@ void geninv_gpu(double* G, double* Y, int N, int M) {
     cout << "\n----- A -----\n";
     display<double>(A, M, M);
 
-    
+    cout << "\n----- S -----\n";
+    full_rank_cholesky_decomposition_gpu(A, S, M, block, grid);
+    display<double>(S, M, M);
+
     double stop = seconds();
     cout << "\nMoore-Penrose pseudoinverse calculation time on GPU: " << stop - start << " seconds" << endl;
 
