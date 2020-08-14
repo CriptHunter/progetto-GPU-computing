@@ -249,6 +249,7 @@ void geninv(double* G, double* Y, int N, int M)
         multiply(Gt, old_M, N, G, N, old_M, A); // A = Gt * G
 
     int rank = full_rank_cholesky_decomposition(A, S, M); // S = cholesky(A)
+
     drop_zero_column(S, L, M, rank); // L = S without zero columns
     transpose(L, Lt, M, rank);
     multiply(Lt, rank, M, L, M, rank, Lt_L); // Lt_L = Lt * L

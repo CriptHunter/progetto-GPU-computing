@@ -20,11 +20,10 @@ r=0;
 for k=1:n
     r=r+1;
     
-    %a = A(k:n,k)
-    %b = L(k:n,1:(r-1))
-    %ct = L(k,1:(r-1))'
-    %d = L(k:n,1:(r-1))*L(k,1:(r-1))'
-    %a_meno_d = A(k:n,k)-L(k:n,1:(r-1))*L(k,1:(r-1))'
+    a = A(k:n,k)
+    b = L(k:n,1:(r-1))
+    ct = L(k,1:(r-1))'
+    d = 
     
     
     L(k:n,r)=A(k:n,k)-L(k:n,1:(r-1))*L(k,1:(r-1))';
@@ -37,7 +36,6 @@ for k=1:n
     else
         r=r-1;
     end
-    elle = L;
 end
 L=L(:,1:r)
  % Computation of the generalized inverse of G
