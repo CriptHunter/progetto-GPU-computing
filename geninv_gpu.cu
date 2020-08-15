@@ -126,7 +126,6 @@ __global__ void drop_zero_column_gpu(double* B, double* A, int N, int rank) {
     if (col < rank) {
         B[row*N + col] = A[row*N + col];
     }
-
 }
 
 int full_rank_cholesky_decomposition_gpu(double* A, double* L, int N, dim3 block, dim3 grid) {
@@ -151,7 +150,7 @@ int full_rank_cholesky_decomposition_gpu(double* A, double* L, int N, dim3 block
     for(int k = 0; k < N; k++) {
         r = r+1;
 
-        double* a = (double*) malloc((N-k)*sizeof(double));
+        //double* a = (double*) malloc((N-k)*sizeof(double));
         double* d_a;
         cudaMalloc((void**) &d_a, (N-k)*sizeof(double));
         submatrix_gpu<<<grid, block>>>(A, d_a, N, N, k, N-1, k, k);
@@ -222,9 +221,11 @@ int full_rank_cholesky_decomposition_gpu(double* A, double* L, int N, dim3 block
         }
 
         cp_array_to_matrix<<<grid, block>>>(L, d_a, N, r, k);
+        cudaDeviceSynchronize();
+
         cudaMemcpy(h_L, L, N*N*sizeof(double), cudaMemcpyDeviceToHost);
         
-        free(a);
+        //free(a);
         cudaFree(d_a);
 
         if(h_L[k*N + r-1] > tol) {
@@ -241,6 +242,69 @@ int full_rank_cholesky_decomposition_gpu(double* A, double* L, int N, dim3 block
     }
 
     return r;
+}
+
+__global__ void nodiag_normalize(double *A, double *I, int n, int i){
+	int x = blockIdx.x * blockDim.x + threadIdx.x;
+	int y = blockIdx.y * blockDim.y + threadIdx.y;
+
+	if (x < n && y < n)
+	if (x == i && x!=y){
+		I[x*n + y] /= A[i*n + i];
+		A[x*n + y] /= A[i*n + i];
+	}
+	
+}
+
+__global__ void diag_normalize(double *A, double *I, int n, int i){
+	int x = blockIdx.x * blockDim.x + threadIdx.x;
+	int y = blockIdx.y * blockDim.y + threadIdx.y;
+
+	if (x < n && y < n)
+	if (x == y && x == i){
+		I[x*n + y] /= A[i*n + i];
+		A[x*n + y] /= A[i*n + i];
+	}
+
+}
+
+__global__ void gaussjordan(double *A, double *I, int n, int i) {
+	int x = blockIdx.x * blockDim.x + threadIdx.x;
+	int y = blockIdx.y * blockDim.y + threadIdx.y;
+
+	if (x < n && y < n){
+		if (x != i){
+			I[x*n + y] -= I[i*n + y] * A[x*n + i];
+			if (y != i){
+				A[x*n + y] -= A[i*n + y] * A[x*n + i];
+			}	 
+		}
+	}
+}
+
+__global__ void set_zero(double *A, double *I, int n, int i) {
+	int x = blockIdx.x * blockDim.x + threadIdx.x;
+	int y = blockIdx.y * blockDim.y + threadIdx.y;
+
+	if (x < n && y < n){
+		if (x != i){
+			if (y == i){
+				A[x*n + y] = 0;
+			}
+		}
+	}
+}
+
+__global__ void set_diagonal(double* A, int N) {
+    uint row = blockIdx.y * blockDim.y + threadIdx.y;
+    uint col = blockIdx.x * blockDim.x + threadIdx.x;
+    
+    if(row < N && col < N) {
+        if (row == col) 
+            A[row*N + col] = 1.0;
+        else 
+            A[row*N + col] = 0.0;
+    }
 }
 
 void geninv_gpu(double* G, double* Y, int N, int M) {
@@ -276,18 +340,18 @@ void geninv_gpu(double* G, double* Y, int N, int M) {
     
     transpose_gpu<<<grid, block>>>(d_Gt, d_G, N, M); // transpose G in Gt
     cudaDeviceSynchronize();
-    //cudaMemcpy(Gt, d_Gt, M*N*sizeof(double), cudaMemcpyDeviceToHost);
+    cudaMemcpy(Gt, d_Gt, M*N*sizeof(double), cudaMemcpyDeviceToHost);
 
     if(N < M) {
         transposed = true;
         M = N;
     }
 
-    //cout << "\n----- G -----\n";
-    //display<double>(G, N, M);
+    cout << "\n----- G -----\n";
+    display<double>(G, N, M);
 
-    //cout << "\n----- Gt -----\n";
-    //display<double>(Gt, M, N);
+    cout << "\n----- Gt -----\n";
+    display<double>(Gt, M, N);
 
     A    = (double *) malloc(M*M*sizeof(double)); // Gt * G
     S    = (double *) malloc(M*M*sizeof(double)); // lower triangular of A
@@ -308,20 +372,44 @@ void geninv_gpu(double* G, double* Y, int N, int M) {
     else
         product_gpu<<<grid, block>>>(d_Gt, d_G, d_A, old_M, old_M, N); // // A = Gt * G 
     cudaDeviceSynchronize();
-    //cudaMemcpy(A, d_A, M*M*sizeof(double), cudaMemcpyDeviceToHost);
+    cudaMemcpy(A, d_A, M*M*sizeof(double), cudaMemcpyDeviceToHost);
     
-    //cout << "\n----- A -----\n";
-    //display<double>(A, M, M);
+    cout << "\n----- A -----\n";
+    display<double>(A, M, M);
 
     cout << "\n----- S -----\n";
-    full_rank_cholesky_decomposition_gpu(d_A, d_S, M, block, grid);
+    int rank = full_rank_cholesky_decomposition_gpu(d_A, d_S, M, block, grid);
     cudaMemcpy(S, d_S, M*M*sizeof(double), cudaMemcpyDeviceToHost);
     display<double>(S, M, M);
 
-    cout << "\n----- L -----\n";
+    cout << "\n----- L (" << M - rank << " columns dropped)-----\n";
+    submatrix_gpu<<<grid, block>>>(d_S, d_L, M, M, 0, M, 0, rank-1);
+    cudaMemcpy(L, d_L, M*M*sizeof(double), cudaMemcpyDeviceToHost);
+    display<double>(L, M, rank);
 
+    cout << "\n----- Lt -----\n";
+    transpose_gpu<<<grid, block>>>(d_Lt, d_L, M, rank);
+    cudaMemcpy(Lt, d_Lt, rank*M*sizeof(double), cudaMemcpyDeviceToHost);
+    display<double>(Lt, rank, M);
+
+    cout << "\n----- Lt * L -----\n";
+    product_gpu<<<grid, block>>>(d_Lt, d_L, d_Lt_L, rank, rank, M);
+    cudaMemcpy(Lt_L, d_Lt_L, M*M*sizeof(double), cudaMemcpyDeviceToHost);
+    display<double>(Lt_L, rank, rank);
+
+    cout << "\n----- I -----\n";
+    set_diagonal<<<grid, block>>>(d_I, rank);
+
+    for (int i = 0; i < rank; i++){
+		nodiag_normalize <<<grid, block>>>(d_Lt_L, d_I, rank, i);
+		diag_normalize <<<grid, block>>>(d_Lt_L, d_I, rank, i);
+		gaussjordan <<<grid, block>>>(d_Lt_L, d_I, rank, i);
+		set_zero <<<grid, block>>>(d_Lt_L, d_I, rank, i);
+    }
+    
+    cudaMemcpy(I, d_I, rank*rank*sizeof(double), cudaMemcpyDeviceToHost);
+    display<double>(I, rank, rank);
 
     double stop = seconds();
     cout << "\nMoore-Penrose pseudoinverse calculation time on GPU: " << stop - start << " seconds" << endl;
-
 }

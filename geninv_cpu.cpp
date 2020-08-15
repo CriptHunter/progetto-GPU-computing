@@ -401,23 +401,4 @@ void geninv_verbose(double* G, double* Y, int N, int M)
     free(tmp2);
 }
 
-void random_matrix(double* G, int N, int M) {
-    srand(time(NULL));
-    for(int i = 0; i < N; i++)
-        for(int j = 0; j < M; j++)
-            G[i*M + j] = rand() % 20;
-            //G[i*M + j] = i*M + j;
-}
-
-void printf_matrix(double* G, int N, int M, const char* filename) {
-    FILE *f = fopen(filename, "w");
-    for(int i = 0; i < N; i++) {
-        for(int j = 0; j < M; j++)
-            fprintf(f, "%f\t", G[i*M + j]);
-        fprintf(f, "\n");
-    }
-    fclose(f);
-}
-
-
 
