@@ -411,5 +411,24 @@ void geninv_gpu(double* G, double* Y, int N, int M) {
     display<double>(I, rank, rank);
 
     double stop = seconds();
+
+    free(Gt);
+    free(A);
+    free(I);
+    free(S);
+    free(L);
+    free(Lt);
+    free(Lt_L);
+
+    cudaFree(d_Gt);
+    cudaFree(d_A);
+    cudaFree(d_I);
+    cudaFree(d_S);
+    cudaFree(L);
+    cudaFree(Lt);
+    cudaFree(Lt_L);
+    cudaDeviceReset();
+
+
     cout << "\nMoore-Penrose pseudoinverse calculation time on GPU: " << stop - start << " seconds" << endl;
 }
