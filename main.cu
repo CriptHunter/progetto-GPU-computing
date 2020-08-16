@@ -4,19 +4,17 @@
 #include <cmath>
 #include <cstring>
 #include <time.h>
-#include <sys/time.h>
 #include <stdio.h>
 using namespace std;
 #include "geninv_cpu.cpp"
 #include "geninv_gpu.cu"
 
-
 void random_matrix(double* G, int N, int M) {
     srand(time(NULL));
     for(int i = 0; i < N; i++)
         for(int j = 0; j < M; j++)
-            G[i*M + j] = rand() % 20;
-            //mG[i*M + j] = i*M + j;
+            G[i*M + j] = rand() % 5;
+            //G[i*M + j] = i*M + j;
 }
 
 //print a matrix to a txt file
@@ -32,8 +30,8 @@ void printf_matrix(double* G, int N, int M, const char* filename) {
 
 
 int main() {
-    int N = 300;
-    int M = 300;
+    int N = 250;
+    int M = 250;
 
     double* G = (double *) malloc(N*M*sizeof(double)); // start matrix
     double* Y = (double *) malloc(M*N*sizeof(double)); // pseudoinverse

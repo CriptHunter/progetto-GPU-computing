@@ -39,10 +39,10 @@ for k=1:n
     end
     elle = L;
 end
-L=L(:,1:r);
+L=L(:,1:r)
  % Computation of the generalized inverse of G
-L'*L
-M=inv(L'*L)
+L'*L;
+M=inv(L'*L);
 if transpose
  Y=G'*L*M*M*L';
 else
