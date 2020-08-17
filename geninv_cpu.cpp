@@ -241,11 +241,7 @@ void geninv(double* G, double* Y, int N, int M)
     else
         multiply(Gt, old_M, N, G, N, old_M, A); // A = Gt * G
 
-    double start_cho = seconds();
     int rank = full_rank_cholesky_decomposition(A, S, M); // S = cholesky(A)
-    double end_cho = seconds();
-    cout << "\ncholesky decomposition on CPU: " << end_cho - start_cho << " seconds" << endl;
-
 
     drop_zero_column(S, L, M, rank); // L = S without zero columns
     transpose(L, Lt, M, rank);

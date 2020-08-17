@@ -30,8 +30,8 @@ void printf_matrix(double* G, int N, int M, const char* filename) {
 
 
 int main() {
-    int N = 600;
-    int M = 600;
+    int N = 500;
+    int M = 500;
 
     double* G = (double *) malloc(N*M*sizeof(double)); // start matrix
     double* Y = (double *) malloc(M*N*sizeof(double)); // pseudoinverse
@@ -42,6 +42,8 @@ int main() {
     //exec and print from CPU
     geninv(G, Y, N, M);
     printf_matrix(Y, M, N, "pseudoinverse_CPU.txt");
+
+    memset(Y, 0, M*N*sizeof(double));
 
     //exec and print from GPU
     geninv_gpu(G, Y, N, M);

@@ -98,11 +98,6 @@ __global__ void submatrix_gpu(double* A, double* B, int N, int M, int row_start,
 
 }
 
-//calculate tollerance using diagonal of square matrix
-__global__ void tollerance(double*A, int N, double* tol) {
-    *tol = 900; // TODO!
-}
-
 __global__ void cp_array_to_matrix(double* A, double* B, int N, int r, int k) {
     uint row = blockIdx.y * blockDim.y + threadIdx.y;
     uint col = blockIdx.x * blockDim.x + threadIdx.x;
@@ -156,45 +151,33 @@ int full_rank_cholesky_decomposition_gpu(double* d_L, double* d_A, int N, dim3 b
     bool return_v = false;
     bool* d_return_v;
 
-    CHECK( cudaMalloc((void**) &d_a, N*N*sizeof(double)) );
+    CHECK( cudaMalloc((void**) &d_a, N*sizeof(double)) );
     CHECK( cudaMalloc((void**) &d_b, N*N*sizeof(double)) );
     CHECK( cudaMalloc((void**) &d_c, N*N*sizeof(double)) );
-    CHECK( cudaMalloc((void**) &d_d, N*N*sizeof(double)) );
+    CHECK( cudaMalloc((void**) &d_d, N*sizeof(double)) );
     CHECK( cudaMalloc(&d_return_v, sizeof(bool)) );
 
     for(int k = 0; k < N; k++) {
         r = r+1;
 
         submatrix_gpu<<<grid, block>>>(d_A, d_a, N, N, k, N-1, k, k);
-        //cudaDeviceSynchronize();
         
         if(r-2 >= 0) {
             submatrix_gpu<<<grid, block>>>(d_L, d_b, N, N, k, N-1, 0, r-2);
-            //cudaDeviceSynchronize();
-
             submatrix_gpu<<<grid, block>>>(d_L, d_c, N, N, k, k, 0, r-2);
-            //cudaDeviceSynchronize();
-
             product_gpu<<<grid, block>>>(d_b, d_c, d_d, N-k, 1, r-1);
-            //cudaDeviceSynchronize();
-
             subtract_gpu<<<grid, block>>>(d_a, d_d, N-k, 1);
-            //cudaDeviceSynchronize();
         }
 
         cp_array_to_matrix<<<grid, block>>>(d_L, d_a, N, r, k);
-        //cudaDeviceSynchronize();
         
         cholesky_sqrt_gpu<<<1, 1>>>(d_return_v, d_L, N, r, k);
         cudaMemcpy(&return_v, d_return_v, sizeof(bool), cudaMemcpyDeviceToHost);
-        //cudaDeviceSynchronize();
 
         if(return_v)
             cholesky_division_gpu<<<grid, block>>>(d_L, N, r, k);
         else
             r = r-1;
-
-        //cudaDeviceSynchronize(); 
     }
 
     cudaFree(d_a);
@@ -276,13 +259,13 @@ void geninv_gpu(double* G, double* Y, int N, int M) {
     
 
     //cpu variables declaration
-    // double* Gt = (double *) malloc(M*N*sizeof(double)); // transpose of G
-    // double* A; // Gt * G
-    // double* S; // lower triangular of A
-    // double* L; // lower triangular with zero columns dropped
-    // double* Lt; // upper triangular with zero rows dropped
-    // double* Lt_L; // Lt * L
-    // double* I; // inverse of Lt * L
+    double* Gt = (double *) malloc(M*N*sizeof(double)); // transpose of G
+    double* A; // Gt * G
+    double* S; // lower triangular of A
+    double* L; // lower triangular with zero columns dropped
+    double* Lt; // upper triangular with zero rows dropped
+    double* Lt_L; // Lt * L
+    double* I; // inverse of Lt * L
 
     //gpu variables declaration
     double* d_G;
@@ -297,7 +280,6 @@ void geninv_gpu(double* G, double* Y, int N, int M) {
 
     CHECK( cudaMalloc((void**) &d_G, N*M*sizeof(double)) );
     CHECK( cudaMalloc((void**) &d_Gt, M*N*sizeof(double)) );
-    CHECK( cudaMalloc((void**) &d_Y, M*N*sizeof(double)) );
     cudaMemcpy(d_G, G, N*M*sizeof(double), cudaMemcpyHostToDevice);
     cudaDeviceSynchronize();
     
@@ -320,12 +302,12 @@ void geninv_gpu(double* G, double* Y, int N, int M) {
     cudaFree(G);
     //cudaFree(Gt);
 
-    /*A    = (double *) malloc(M*M*sizeof(double)); // Gt * G
+    A    = (double *) malloc(M*M*sizeof(double)); // Gt * G
     S    = (double *) malloc(M*M*sizeof(double)); // lower triangular of A
     L    = (double *) malloc(M*M*sizeof(double)); // lower triangular with zero columns dropped
     Lt   = (double *) malloc(M*M*sizeof(double)); // upper triangular with zero rows dropped
     Lt_L = (double *) malloc(M*M*sizeof(double)); // Lt * L
-    I    = (double *) malloc(M*M*sizeof(double)); // inverse of Lt * L*/
+    I    = (double *) malloc(M*M*sizeof(double)); // inverse of Lt * L
 
     CHECK( cudaMalloc((void**) &d_A, M*M*sizeof(double)) );
     CHECK( cudaMalloc((void**) &d_S, M*M*sizeof(double)) );
@@ -339,15 +321,15 @@ void geninv_gpu(double* G, double* Y, int N, int M) {
     else
         product_gpu<<<grid, block>>>(d_Gt, d_G, d_A, old_M, old_M, N); // // A = Gt * G 
 
-    // cudaMemcpy(A, d_A, M*M*sizeof(double), cudaMemcpyDeviceToHost);
+    cudaMemcpy(A, d_A, M*M*sizeof(double), cudaMemcpyDeviceToHost);
     // cout << "\n----- A -----\n";
     // display<double>(A, M, M);
 
-    // cout << "\n----- S -----\n";
-    double start_cho = seconds();
-    int rank = full_rank_cholesky_decomposition_gpu(d_S, d_A, M, block, grid);
-    double end_cho = seconds();
-    cout << "\ncholesky decomposition: " << end_cho - start_cho << " seconds" << endl;
+    //cout << "\n----- S -----\n";
+    //int rank = full_rank_cholesky_decomposition_gpu(d_S, d_A, M, block, grid);
+    int rank = full_rank_cholesky_decomposition(A, S, M); // S = cholesky(A)
+    //display(S, M, M);
+    cudaMemcpy(d_S, S, M*M*sizeof(double), cudaMemcpyHostToDevice);
 
     // cudaMemcpy(S, d_S, M*M*sizeof(double), cudaMemcpyDeviceToHost);
     // display<double>(S, M, M);
@@ -403,6 +385,7 @@ void geninv_gpu(double* G, double* Y, int N, int M) {
         product_gpu<<<grid, block>>>(d_L, d_I, d_tmp, M, rank, rank);
         product_gpu<<<grid, block>>>(d_tmp, d_I, d_tmp1, M, rank, rank);
         product_gpu<<<grid, block>>>(d_tmp1, d_Lt, d_tmp2, M, M, rank);
+        CHECK( cudaMalloc((void**) &d_Y, M*N*sizeof(double)) );
         product_gpu<<<grid, block>>>(d_tmp2, d_Gt, d_Y, M, N, M);
 
         // multiply(L, M, rank, I, rank, rank, tmp);
@@ -414,7 +397,9 @@ void geninv_gpu(double* G, double* Y, int N, int M) {
     cudaDeviceSynchronize();
     double stop = seconds();
 
-    cudaMemcpy(Y, d_Y, M*N*sizeof(double), cudaMemcpyDeviceToHost);
+    CHECK( cudaMemcpy(Y, d_Y, old_M*N*sizeof(double), cudaMemcpyDeviceToHost) );
+    cudaDeviceSynchronize();
+    //display<double>(Y, old_M, N);
 
     // free(Gt);
     // free(A);
@@ -424,7 +409,7 @@ void geninv_gpu(double* G, double* Y, int N, int M) {
     // free(Lt);
     // free(Lt_L);
 
-    cudaFree(d_Gt);
+    //cudaFree(d_Gt);
     cudaFree(d_A);
     cudaFree(d_I);
     cudaFree(d_S);
