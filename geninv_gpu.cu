@@ -73,6 +73,22 @@ __global__ void product_gpu(double* A, double* B, double* C, int N, int M, int P
 		C[row * M + col] = sum;
 }
 
+__global__ void product2_gpu(double *a, double *b, double *c, int m, int n, int k)
+{ 
+    int row = blockIdx.y * blockDim.y + threadIdx.y; 
+    int col = blockIdx.x * blockDim.x + threadIdx.x;
+    int sum = 0;
+    if( col < k && row < m) 
+    {
+        for(int i = 0; i < n; i++) 
+        {
+            sum += a[row * n + i] * b[i * k + col];
+        }
+        c[row * k + col] = sum;
+    }
+}
+
+
 __global__ void subtract_gpu(double* a, double* b, int N, int M) {
     uint row = blockIdx.y * blockDim.y + threadIdx.y;
     uint col = blockIdx.x * blockDim.x + threadIdx.x;
@@ -92,11 +108,16 @@ __global__ void submatrix_gpu(double* A, double* B, int N, int M, int row_start,
     uint row = blockIdx.y * blockDim.y + threadIdx.y;
     uint col = blockIdx.x * blockDim.x + threadIdx.x;
 
+
     if(row >= row_start && row <= row_end && col >= col_start && col <= col_end) {
-        //printf("A(%d) ---> B(%d)    row = %d    col = %d   val = %lf\n", row*M+col, 
-                //(row-row_start)*n_cols+col-col_start, row, col, A[row*M+col]);
+        //printf("row end = %d    col end = %d\n", row_end, col_end);
+
+        //printf("A(%d) ---> B(%d)    row = %d    col = %d   val = %lf  row start = %d   row end = %d   col start = %d    col end = %d\n", 
+        //row*M+col, (row-row_start)*n_cols+col-col_start, row, col, A[row*M+col], row_start, row_end, col_start, col_end);
         B[(row-row_start)*n_cols + col - col_start] = A[row*M + col];
+        //printf("cose = %lf\n", B[(row-row_start)*n_cols + col - col_start] );
     }
+
 }
 
 //calculate tollerance using diagonal of square matrix
@@ -108,9 +129,6 @@ __global__ void cp_array_to_matrix(double* A, double* B, int N, int r, int k) {
     uint row = blockIdx.y * blockDim.y + threadIdx.y;
     uint col = blockIdx.x * blockDim.x + threadIdx.x;
     uint i = row * N + col + k;
-
-    if(row == 0 && col == 0)
-    printf("on gpu: %lf", B[i-k]);
 
     if(i < N)
         A[i*N + r-1] = B[i-k];    
@@ -133,118 +151,66 @@ __global__ void drop_zero_column_gpu(double* B, double* A, int N, int rank) {
     }
 }
 
-int full_rank_cholesky_decomposition_gpu(double* A, double* L, int N, dim3 block, dim3 grid) {
-    double* h_L = (double*) malloc(N*N*sizeof(double));
-    // double tol = A[0];
-
-    // for(int i = 0; i < N; i++) {
-    //     double k = A[i*N + i];
-    //     if(k < tol)
-    //         tol = k;
-    // }
-    double tol = 50 * 1E-9;
-
-    // double tol;
-    // double* d_tol;
-    // cudaMalloc(&d_tol, sizeof(double));
-    // tollerance<<<grid,block>>>(A, N, d_tol);
-    // cudaMemcpy(&tol, d_tol, sizeof(double), cudaMemcpyDeviceToHost); 
+int full_rank_cholesky_decomposition_gpu(double* d_L, double* d_A, int N, dim3 block, dim3 grid) {
 
     int r = 0;
+    double* d_a;
+    double* d_b;
+    double* d_c;
+    double* d_d;
+    double* L = (double*) malloc(N*N*sizeof(double));
+    double* a = (double*) malloc(N*N*sizeof(double));
+
+    CHECK( cudaMalloc((void**) &d_a, N*N*sizeof(double)) );
+    CHECK( cudaMalloc((void**) &d_b, N*N*sizeof(double)) );
+    CHECK( cudaMalloc((void**) &d_c, N*N*sizeof(double)) );
+    CHECK( cudaMalloc((void**) &d_d, N*N*sizeof(double)) );
 
     for(int k = 0; k < N; k++) {
         r = r+1;
 
-        double* a = (double*) malloc((N-k)*sizeof(double));
-        double* d_a;
-        CHECK( cudaMalloc((void**) &d_a, (N-k)*sizeof(double)) );
-        submatrix_gpu<<<grid, block>>>(A, d_a, N, N, k, N-1, k, k);
-        //cudaMemcpy(a, d_a, (N-k)*sizeof(double), cudaMemcpyDeviceToHost);
+        submatrix_gpu<<<grid, block>>>(d_A, d_a, N, N, k, N-1, k, k);
+        cudaDeviceSynchronize();
 
-        // cout << "matrix A: " << endl;
-        // display(a, N-k, 1);
-        // cout << endl;
-
-
+        
         if(r-2 >= 0) {
-            //double* b = (double*) malloc((N-k)*(r-1)*sizeof(double));
-            double* d_b;
-            CHECK( cudaMalloc((void**) &d_b, (N-k)*(r-1)*sizeof(double)) );
-            submatrix_gpu<<<grid, block>>>(L, d_b, N, N, k, N-1, 0, r-2);
+            submatrix_gpu<<<grid, block>>>(d_L, d_b, N, N, k, N-1, 0, r-2);
             cudaDeviceSynchronize();
-            //cudaMemcpy(b, d_b, (N-k)*(r-1)*sizeof(double), cudaMemcpyDeviceToHost);
 
-            //double* c = (double*) malloc((r-1)*sizeof(double));
-            double* d_c;
-            CHECK( cudaMalloc((void**) &d_c, (r-1)*sizeof(double)) );
-            submatrix_gpu<<<grid, block>>>(L, d_c, N, N, k, k, 0, r-2);
+            submatrix_gpu<<<grid, block>>>(d_L, d_c, N, N, k, k, 0, r-2);
             cudaDeviceSynchronize();
-            //cudaMemcpy(c, d_c, (r-1)*sizeof(double), cudaMemcpyDeviceToHost);
 
-            //double* ct = (double*) malloc((r-1)*sizeof(double));
-            double* d_ct;
-            CHECK( cudaMalloc((void**) &d_ct, (r-1)*sizeof(double)) );
-            transpose_gpu<<<grid, block>>>(d_ct, d_c, 1, r-1);
+            product_gpu<<<grid, block>>>(d_b, d_c, d_d, N-k, 1, r-1);
             cudaDeviceSynchronize();
-            //cudaMemcpy(ct, d_ct, (r-1)*sizeof(double), cudaMemcpyDeviceToHost);
-
-            //double* d = (double*) malloc((N-k)*sizeof(double));
-            double* d_d;
-            CHECK( cudaMalloc((void**) &d_d, (N-k)*sizeof(double)) );
-            product_gpu<<<grid, block>>>(d_b, d_ct, d_d, N-k, 1, r-1);
-            cudaDeviceSynchronize();
-            //cudaMemcpy(d, d_d, (N-k)*sizeof(double), cudaMemcpyDeviceToHost);
 
             subtract_gpu<<<grid, block>>>(d_a, d_d, N-k, 1);
             cudaDeviceSynchronize();
-            //cudaMemcpy(a, d_a, (N-k)*sizeof(double), cudaMemcpyDeviceToHost);
-
-            /*cout << "matrix B: " << endl;
-                display(b, N-k, r-1);
-                cout << endl;
-                cout << "matrix C: " << endl;
-                display(c, 1, r-1);
-                cout << endl;
-                cout << "matrix Ct: " << endl;
-                display(ct, r-1, 1);
-                cout << endl;
-                cout << "matrix D: " << endl;
-                display(d, N-k, 1);
-                cout << endl;
-                cout << "A meno D: " << endl;
-                display(a, N-k, 1);
-                cout << endl;              */
-
-            //free(b);
-            cudaFree(d_b);
-            //free(c);
-            cudaFree(d_c);
-            //free(ct);
-            cudaFree(d_ct);
-            //free(d);
-            cudaFree(d_d);
         }
 
-        cp_array_to_matrix<<<grid, block>>>(L, d_a, N, r, k);
+        CHECK( cudaMemcpy(a, d_a, N*N*sizeof(double), cudaMemcpyDeviceToHost) );
+        CHECK( cudaMemcpy(L, d_L, N*N*sizeof(double), cudaMemcpyDeviceToHost) );
         cudaDeviceSynchronize();
 
-        cudaMemcpy(h_L, L, N*N*sizeof(double), cudaMemcpyDeviceToHost);
+        for(int i = k; i < N; i++)
+            L[i*N + r-1] = a[i-k];
         
-        //free(a);
-        cudaFree(d_a);
-
-        if(h_L[k*N + r-1] > tol) {
-            h_L[k*N + r-1] = sqrt(h_L[k*N + r-1]);
+        if(L[k*N + r-1] > 0) {
+            L[k*N + r-1] = sqrt(L[k*N + r-1]);
 
             if (k+1 < N)
                 for(int i = k+1; i < N; i++)
-                    h_L[i*N + r-1] = h_L[i*N + r-1] / h_L[k*N + r-1]; 
+                    L[i*N + r-1] = L[i*N + r-1] / L[k*N + r-1]; 
         }
         else
             r = r-1;
 
-        cudaMemcpy(L, h_L, N*N*sizeof(double), cudaMemcpyHostToDevice);
+        cudaMemcpy(d_L, L, N*N*sizeof(double), cudaMemcpyHostToDevice);
     }
+
+    cudaFree(d_a);
+    cudaFree(d_b);
+    cudaFree(d_c);
+    cudaFree(d_d);
 
     return r;
 }
@@ -316,7 +282,8 @@ void geninv_gpu(double* G, double* Y, int N, int M) {
     int old_M = M;
     bool transposed = false;
     dim3 block(BLOCK_SIZE, BLOCK_SIZE, 1);
-	dim3 grid((M + block.x - 1) / block.x, (N + block.y - 1) / block.y, 1);
+    dim3 grid((M + block.x - 1) / block.x, (N + block.y - 1) / block.y, 1);
+    
 
     //cpu variables declaration
     double* Gt = (double *) malloc(M*N*sizeof(double)); // transpose of G
@@ -337,26 +304,26 @@ void geninv_gpu(double* G, double* Y, int N, int M) {
     double* d_Lt_L;
     double* d_I;
 
-    cudaMalloc((void**) &d_G, N*M*sizeof(double));
-    cudaMalloc((void**) &d_Gt, M*N*sizeof(double));
+    CHECK( cudaMalloc((void**) &d_G, N*M*sizeof(double)) );
+    CHECK( cudaMalloc((void**) &d_Gt, M*N*sizeof(double)) );
     cudaMemcpy(d_G, G, N*M*sizeof(double), cudaMemcpyHostToDevice);
     
     double start = seconds();
     
     transpose_gpu<<<grid, block>>>(d_Gt, d_G, N, M); // transpose G in Gt
     cudaDeviceSynchronize();
-    cudaMemcpy(Gt, d_Gt, M*N*sizeof(double), cudaMemcpyDeviceToHost);
+    //cudaMemcpy(Gt, d_Gt, M*N*sizeof(double), cudaMemcpyDeviceToHost);
 
     if(N < M) {
         transposed = true;
         M = N;
     }
 
-    cout << "\n----- G -----\n";
-    display<double>(G, N, M);
+    //cout << "\n----- G -----\n";
+    //display<double>(G, N, M);
 
-    cout << "\n----- Gt -----\n";
-    display<double>(Gt, M, N);
+    // cout << "\n----- Gt -----\n";
+    // display<double>(Gt, M, N);
 
     cudaFree(G);
     cudaFree(Gt);
@@ -380,32 +347,36 @@ void geninv_gpu(double* G, double* Y, int N, int M) {
     else
         product_gpu<<<grid, block>>>(d_Gt, d_G, d_A, old_M, old_M, N); // // A = Gt * G 
     cudaDeviceSynchronize();
-    cudaMemcpy(A, d_A, M*M*sizeof(double), cudaMemcpyDeviceToHost);
-    
-    cout << "\n----- A -----\n";
-    display<double>(A, M, M);
 
-    cout << "\n----- S -----\n";
-    int rank = full_rank_cholesky_decomposition_gpu(d_A, d_S, M, block, grid);
-    cudaMemcpy(S, d_S, M*M*sizeof(double), cudaMemcpyDeviceToHost);
-    display<double>(S, M, M);
+    // cudaMemcpy(A, d_A, M*M*sizeof(double), cudaMemcpyDeviceToHost);
+    // cout << "\n----- A -----\n";
+    // display<double>(A, M, M);
 
-    cout << "\n----- L (" << M - rank << " columns dropped)-----\n";
+    // cout << "\n----- S -----\n";
+    int rank = full_rank_cholesky_decomposition_gpu(d_S, d_A, M, block, grid);
+    cudaDeviceSynchronize();
+    // cudaMemcpy(S, d_S, M*M*sizeof(double), cudaMemcpyDeviceToHost);
+    // display<double>(S, M, M);
+
+    // cout << "\n----- L (" << M - rank << " columns dropped)-----\n";
     submatrix_gpu<<<grid, block>>>(d_S, d_L, M, M, 0, M, 0, rank-1);
-    cudaMemcpy(L, d_L, M*M*sizeof(double), cudaMemcpyDeviceToHost);
-    //display<double>(L, M, rank);
+    cudaDeviceSynchronize();
+    // cudaMemcpy(L, d_L, M*M*sizeof(double), cudaMemcpyDeviceToHost);
+    // display<double>(L, M, rank);
 
-    cout << "\n----- Lt -----\n";
+    // cout << "\n----- Lt -----\n";
     transpose_gpu<<<grid, block>>>(d_Lt, d_L, M, rank);
-    cudaMemcpy(Lt, d_Lt, rank*M*sizeof(double), cudaMemcpyDeviceToHost);
-    //display<double>(Lt, rank, M);
+    cudaDeviceSynchronize();
+    // cudaMemcpy(Lt, d_Lt, rank*M*sizeof(double), cudaMemcpyDeviceToHost);
+    // display<double>(Lt, rank, M);
 
-    cout << "\n----- Lt * L -----\n";
+    // cout << "\n----- Lt * L -----\n";
     product_gpu<<<grid, block>>>(d_Lt, d_L, d_Lt_L, rank, rank, M);
-    cudaMemcpy(Lt_L, d_Lt_L, M*M*sizeof(double), cudaMemcpyDeviceToHost);
-    //display<double>(Lt_L, rank, rank);
+    cudaDeviceSynchronize();
+    // cudaMemcpy(Lt_L, d_Lt_L, M*M*sizeof(double), cudaMemcpyDeviceToHost);
+    // display<double>(Lt_L, rank, rank);
 
-    cout << "\n----- I -----\n";
+    //cout << "\n----- I -----\n";
     set_diagonal<<<grid, block>>>(d_I, rank);
 
     for (int i = 0; i < rank; i++){
@@ -415,8 +386,36 @@ void geninv_gpu(double* G, double* Y, int N, int M) {
 		set_zero <<<grid, block>>>(d_Lt_L, d_I, rank, i);
     }
     
+    cudaDeviceSynchronize();
     cudaMemcpy(I, d_I, rank*rank*sizeof(double), cudaMemcpyDeviceToHost);
-    //display<double>(I, rank, rank);
+    display<double>(I, rank, rank);
+
+    double* d_tmp;
+    double* d_tmp1; 
+    double* d_tmp2;
+
+    
+
+    if(transposed) { // Y = Gt * L * I * I * Lt
+        // tmp =  (double *) malloc(old_M*rank*sizeof(double));
+        // tmp1 = (double *) malloc(old_M*rank*sizeof(double));
+        // tmp2 = (double *) malloc(old_M*rank*sizeof(double));
+
+        // multiply(Gt, old_M, N, L, N, rank, tmp);
+        // multiply(tmp, old_M, rank, I, rank, rank, tmp1);
+        // multiply(tmp1, old_M, rank, I, rank, rank, tmp2);
+        // multiply(tmp2, old_M, rank, Lt, rank, N, Y);
+    }
+    else { // Y = L * I * I * Lt * Gt
+        CHECK( cudaMalloc((void**) &d_tmp, old_M*rank*sizeof(double)) );
+        CHECK( cudaMalloc((void**) &d_tmp1, old_M*rank*sizeof(double)) );
+        CHECK( cudaMalloc((void**) &d_tmp2, old_M*old_M*sizeof(double)) );
+
+        // multiply(L, M, rank, I, rank, rank, tmp);
+        // multiply(tmp, M, rank, I, rank, rank, tmp1);
+        // multiply(tmp1, M, rank, Lt, rank, M, tmp2); 
+        // multiply(tmp2, M, M, Gt, M, N, Y);
+    }
 
     double stop = seconds();
 

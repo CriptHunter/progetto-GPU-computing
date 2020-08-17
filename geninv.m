@@ -1,6 +1,6 @@
 function Y = geninv(G)
 
-G = dlmread('matrix.txt')
+G = dlmread('matrix.txt');
 [m,n] = size(G);
 
 % Returns the Moore-Penrose inverse of the argument
@@ -11,7 +11,7 @@ if m<n
     A=G*G';
     n=m;
 else
-    A=G'*G;
+    A=G'*G
 end
  % Full rank Cholesky factorization of A
 dA=diag(A); tol= min(dA(dA>0))*1e-9;
@@ -37,12 +37,11 @@ for k=1:n
     else
         r=r-1;
     end
-    elle = L;
 end
-L=L(:,1:r)
+L=L(:,1:r);
  % Computation of the generalized inverse of G
 L'*L;
-M=inv(L'*L);
+M=inv(L'*L)
 if transpose
  Y=G'*L*M*M*L';
 else

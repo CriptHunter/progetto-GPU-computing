@@ -30,8 +30,8 @@ void printf_matrix(double* G, int N, int M, const char* filename) {
 
 
 int main() {
-    int N = 250;
-    int M = 250;
+    int N = 6;
+    int M = 4;
 
     double* G = (double *) malloc(N*M*sizeof(double)); // start matrix
     double* Y = (double *) malloc(M*N*sizeof(double)); // pseudoinverse
