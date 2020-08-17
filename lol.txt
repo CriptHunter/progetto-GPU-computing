@@ -1,8 +1,8 @@
 
-Moore-Penrose pseudoinverse calculation time on CPU: 9.05991e-06 seconds
-0.025641	-0.0139314	-0.0156861	-0.0273961	
--0.0139314	0.0363516	-0.0130411	0.0212675	
--0.0156861	-0.0130411	0.0738866	-0.0161773	
--0.0273961	0.0212675	-0.0161773	0.143889	
+cholesky decomposition on CPU: 0.2203 seconds
 
-Moore-Penrose pseudoinverse calculation time on GPU: 0.000602007 seconds
+Moore-Penrose pseudoinverse calculation time on CPU: 7.68395 seconds
+
+cholesky decomposition: 7.29928 seconds
+
+Moore-Penrose pseudoinverse calculation time on GPU: 8.22674 seconds
