@@ -1,3 +1,5 @@
+// CUDA C program to calculate Moore-Penrose inverse matrix
+
 #define BLOCK_SIZE 32
 #define INDEX(rows, cols, stride) (rows * stride + cols)
 
@@ -71,6 +73,8 @@ __global__ void product_gpu(double* A, double* B, double* C, int N, int M, int P
 		C[row * M + col] = sum;
 }
 
+// Compute submatrix B of A with row starting on row_start and ending on row_end included
+// columns starting on col_start and ending on col_end included
 __global__ void submatrix_gpu(double* A, double* B, int N, int M, int row_start, int row_end, int col_start, int col_end) {
     uint n_cols = col_end - col_start + 1;
     uint row = blockIdx.y * blockDim.y + threadIdx.y;
@@ -81,58 +85,44 @@ __global__ void submatrix_gpu(double* A, double* B, int N, int M, int row_start,
     }
 }
 
-__global__ void nodiag_normalize(double *A, double *I, int N, int i){
+// divide element on row i (diagonal excluded) of I and A by diagonal element A[i][i]
+__global__ void inverse_no_diag_division_gpu(double *A, double *I, int N, int i){
 	int col = blockIdx.x * blockDim.x + threadIdx.x;
 	int row = blockIdx.y * blockDim.y + threadIdx.y;
 
-	if (col < N && row < N)
-	if (col == i && col!=row){
-		I[col*N + row] /= A[i*N + i];
-		A[col*N + row] /= A[i*N + i];
-	}
-	
+    if (col < N && row < N)
+        if (col != row && row == i) {
+            I[i*N + col] /= A[i*N + i];
+            A[i*N + col] /= A[i*N + i];
+        }
 }
 
-__global__ void diag_normalize(double *A, double *I, int N, int i){
+// divide the diagonal element I[i][i] by A[i][i]
+__global__ void inverse_diag_division_gpu(double *A, double *I, int N, int i){
 	int col = blockIdx.x * blockDim.x + threadIdx.x;
-	int row = blockIdx.y * blockDim.y + threadIdx.y;
-
-	if (col < N && row < N)
-	if (col == row && col == i){
-		I[col*N + row] /= A[i*N + i];
-		A[col*N + row] /= A[i*N + i];
-	}
-
+    int row = blockIdx.y * blockDim.y + threadIdx.y;
+        
+    if(row == 0 && col == 0) {
+        I[i*N + i] = I[i*N + i] / A[i*N + i];
+        A[i*N + i]  = 0; // set to 0 to obtain identity on A
+    }
+    
 }
 
-__global__ void gaussjordan(double *A, double *I, int N, int i) {
-	int col = blockIdx.x * blockDim.x + threadIdx.x;
-	int row = blockIdx.y * blockDim.y + threadIdx.y;
-
-	if (col < N && row < N){
-		if (col != i){
-			I[col*N + row] -= I[i*N + row] * A[col*N + i];
-			if (row != i){
-				A[col*N + row] -= A[i*N + row] * A[col*N + i];
-			}	 
-		}
-	}
-}
-
-__global__ void set_zero(double *A, double *I, int N, int i) {
+__global__ void inverse_gauss_jordan_gpu(double *A, double *I, int N, int i) {
 	int col = blockIdx.x * blockDim.x + threadIdx.x;
 	int row = blockIdx.y * blockDim.y + threadIdx.y;
 
 	if (col < N && row < N){
 		if (col != i){
-			if (row == i){
-				A[col*N + row] = 0;
-			}
+			I[col*N + row] = I[col*N + row] - I[i*N + row] * A[col*N + i];
+			if (row != i)
+				A[col*N + row] = A[col*N + row] - A[i*N + row] * A[col*N + i];
 		}
 	}
 }
 
-__global__ void init_identity_gpu(double* A, int N) {
+__global__ void inverse_init_identity_gpu(double* A, int N) {
     uint row = blockIdx.y * blockDim.y + threadIdx.y;
     uint col = blockIdx.x * blockDim.x + threadIdx.x;
     
@@ -144,9 +134,9 @@ __global__ void init_identity_gpu(double* A, int N) {
     }
 }
 
-void geninv_gpu(double* G, double* Y, int N, int M) {
-    int old_M = M; //to remember M original value
-    bool transposed = false; //true if N < M
+double geninv_gpu(double* G, double* Y, int N, int M) {
+    int old_M = M; // to remember M original value
+    bool transposed = false; // true if N < M
     dim3 block(BLOCK_SIZE, BLOCK_SIZE, 1);
     dim3 grid((M + block.x - 1) / block.x, (N + block.y - 1) / block.y, 1);
     
@@ -173,7 +163,7 @@ void geninv_gpu(double* G, double* Y, int N, int M) {
     
     transpose_gpu<<<grid, block>>>(d_Gt, d_G, N, M); // transpose G in Gt
 
-    //pseudoinverse formula is different if N < M
+    // pseudoinverse formula is different if N < M
     if(N < M)  {
         transposed = true;
         M = N;
@@ -199,17 +189,16 @@ void geninv_gpu(double* G, double* Y, int N, int M) {
     int rank = full_rank_cholesky_decomposition(A, S, M); // S = cholesky(A)
     cudaMemcpy(d_S, S, M*M*sizeof(double), cudaMemcpyHostToDevice);
 
-    submatrix_gpu<<<grid, block>>>(d_S, d_L, M, M, 0, M, 0, rank-1); // S = L with 0 columns dropped
+    submatrix_gpu<<<grid, block>>>(d_S, d_L, M, M, 0, M, 0, rank-1); // S = L with zeros columns dropped
     transpose_gpu<<<grid, block>>>(d_Lt, d_L, M, rank); // transpose of L
     product_gpu<<<grid, block>>>(d_Lt, d_L, d_Lt_L, rank, rank, M); // Lt_L = Lt * L
 
     // I = inv(Lt_L)
-    init_identity_gpu<<<grid, block>>>(d_I, rank);
+    inverse_init_identity_gpu<<<grid, block>>>(d_I, rank);
     for (int i = 0; i < rank; i++){
-		nodiag_normalize <<<grid, block>>>(d_Lt_L, d_I, rank, i);
-		diag_normalize <<<grid, block>>>(d_Lt_L, d_I, rank, i);
-		gaussjordan <<<grid, block>>>(d_Lt_L, d_I, rank, i);
-		set_zero <<<grid, block>>>(d_Lt_L, d_I, rank, i);
+        inverse_no_diag_division_gpu <<<grid, block>>>(d_Lt_L, d_I, rank, i);
+        inverse_diag_division_gpu <<<1, 1>>>(d_Lt_L, d_I, rank, i);
+        inverse_gauss_jordan_gpu <<<grid, block>>>(d_Lt_L, d_I, rank, i);
     }
 
     double* d_tmp;
@@ -244,7 +233,6 @@ void geninv_gpu(double* G, double* Y, int N, int M) {
     double stop = seconds();
 
     CHECK( cudaMemcpy(Y, d_Y, old_M*N*sizeof(double), cudaMemcpyDeviceToHost) );
-    cudaDeviceSynchronize();
 
     free(A);
     free(S);
@@ -258,5 +246,6 @@ void geninv_gpu(double* G, double* Y, int N, int M) {
     cudaFree(d_Y);
     cudaDeviceReset();
 
-    cout << "\nMoore-Penrose pseudoinverse calculation time on GPU: " << stop - start << " seconds" << endl;
+    //cout << "\nMoore-Penrose pseudoinverse calculation time on GPU: " << stop - start << " seconds" << endl;
+    return stop - start;
 }
