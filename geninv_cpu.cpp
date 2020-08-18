@@ -152,31 +152,12 @@ int full_rank_cholesky_decomposition(double* A, double* L, int n) {
         if(r-2 >= 0) {
             double* b = submatrix(L, n, n, k, n-1, 0, r-2);
             double* c = submatrix(L, n, n, k, k, 0, r-2);
-            double* ct = (double*) malloc((r-1)*sizeof(double));
-            transpose(c, ct, 1, r-1);
             double* d = (double*) malloc((n-k)*sizeof(double));
-            multiply(b, n-k, r-1, ct, r-1, 1, d);
+            multiply(b, n-k, r-1, c, r-1, 1, d);
             subtract(a, d, n-k, 1);
-
-            /*cout << "matrix A: " << endl;
-            display(a, n-k, r-1);
-            cout << endl;
-            cout << "matrix B: " << endl;
-            display(b, n-k, r-1);
-            cout << endl;
-            cout << "matrix C " << endl;
-            display(c, 1, r-1);
-            cout << endl;
-            cout << "matrix Ct: " << endl;
-            display(ct, r-1, 1);
-            cout << endl;
-            cout << "matrix D: " << endl;
-            display(d, n-k, 1);
-            cout << endl;*/
 
             free(b);
             free(c);
-            free(ct);
             free(d);
         }
 
@@ -210,8 +191,8 @@ void drop_zero_column(double* a, double* b, int n, int rank) {
 
 void geninv(double* G, double* Y, int N, int M)
 {
-    int old_M = M;
-    bool transposed = false;
+    int old_M = M; // to remember M original value
+    bool transposed = false; // true if N < M
     double* Gt = (double *) malloc(M*N*sizeof(double)); // transpose of G
     double* A; // Gt * G
     double* S; // lower triangular of A
@@ -224,6 +205,7 @@ void geninv(double* G, double* Y, int N, int M)
     
     transpose(G, Gt, N, M); // transpose G in Gt
 
+    //pseudoinverse formula is different if N < M
     if(N < M) {
         transposed = true;
         M = N;

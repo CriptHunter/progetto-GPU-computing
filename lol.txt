@@ -1,4 +1,0 @@
-
-Moore-Penrose pseudoinverse calculation time on CPU: 3.46164 seconds
-
-Moore-Penrose pseudoinverse calculation time on GPU: 0.679938 seconds

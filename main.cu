@@ -13,8 +13,8 @@ void random_matrix(double* G, int N, int M) {
     srand(time(NULL));
     for(int i = 0; i < N; i++)
         for(int j = 0; j < M; j++)
-            G[i*M + j] = rand() % 20;
-            //G[i*M + j] = i*M + j;
+            G[i*M + j] = rand() % 50;
+            //G[i*M + j] = i*M + j + 100;
 }
 
 //print a matrix to a txt file
@@ -28,10 +28,9 @@ void printf_matrix(double* G, int N, int M, const char* filename) {
     fclose(f);
 }
 
-
 int main() {
-    int N = 500;
-    int M = 500;
+    int N = 1000;
+    int M = 2000;
 
     double* G = (double *) malloc(N*M*sizeof(double)); // start matrix
     double* Y = (double *) malloc(M*N*sizeof(double)); // pseudoinverse

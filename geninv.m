@@ -48,5 +48,4 @@ if transpose
 else
  Y=L*M*M*L'*G';
 end 
-
 writematrix(Y,'pseudoinverse_matlab.txt','Delimiter','tab')
