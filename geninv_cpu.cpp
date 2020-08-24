@@ -1,5 +1,11 @@
 // C++ program to calculate Moore-Penrose inverse matrix
 
+/**
+ * Print a matrix in a fancy way
+ * @param A Input matrix
+ * @param N number of rows
+ * @param M number of columns
+ */
 template<class T>
 void display(T *A, int N, int M) {
     for (int i = 0; i < N; i++) {
@@ -9,7 +15,13 @@ void display(T *A, int N, int M) {
     }
 }
 
-//transpose a N*M matrix
+/**
+ * Matrix transpose
+ * @param A Input matrix
+ * @param At Transpose of `A`
+ * @param N number of rows
+ * @param M number of columns
+ */
 void transpose(double *A, double *At, int N, int M) {
     int k = 0;
     for (int i = 0; i < M; i++) {
@@ -18,34 +30,48 @@ void transpose(double *A, double *At, int N, int M) {
         }
     }
 }
- 
-//product of two matrix
-void product(double *A, int row1, int col1, double *B, int row2, int col2, double* C) {
-    if(col1 != row2)
+
+/**
+ * Matrix transpose
+ * @param A First matrix
+ * @param N1 number of rows of `A`
+ * @param M1 number of columns of `A`
+ * @param B Second matrix
+ * @param N2 number of rows of `B`
+ * @param M2 number of columns of `B`
+ * @param C `A` * `B`
+ */
+void product(double *A, int N1, int M1, double *B, int N2, int M2, double* C) {
+    if(M1 != N2)
         cout << "dimensione colonna 1 diversa da dimensione riga 2!\n";
 
-    for (int i = 0; i < row1; i++) {
-        for (int j = 0; j < col2; j++) {
+    for (int i = 0; i < N1; i++) {
+        for (int j = 0; j < M2; j++) {
             double sum = 0;
-            for (int k = 0; k < col1; k++)
-                sum = sum + A[i * col1 + k] * B[k * col2 + j];
-            C[i * col2 + j] = sum;
+            for (int k = 0; k < M1; k++)
+                sum = sum + A[i * M1 + k] * B[k * M2 + j];
+            C[i * M2 + j] = sum;
         }
     }
 }
 
+/**
+ * Matrix subtraction
+ * @param A first matrix and result
+ * @param B second matrix
+ * @param N number of rows of `A` and `B`
+ * @param M number of columns of `A` and `B`
+ */
 void subtract(double* A, double* B, int N, int M) {
-    // for(int i = 0; i < N*M; i++) {
-    //     if(A[i] - B[i] < 1E-7 && A[i] - B[i] >= 0)
-    //         A[i] = 0;
-    //     else
-    //         A[i] = A[i] - B[i];
-    // }
     for(int i = 0; i < N*M; i++)
         A[i] = A[i] - B[i];
 }
- 
-// Initializing identity matrix with 1 on diagonal
+
+/**
+ * initialize identity matrix
+ * @param A input matrix
+ * @param N matrix order
+ */
 void init_identity(double* A, int N) {
     for(int i = 0; i < N; ++i) {
         for(int j = 0; j < N; ++j) {
@@ -58,75 +84,115 @@ void init_identity(double* A, int N) {
     }
 }
 
-//partial pivoting using element one of each row
-void pivot_matrix(double* A, double* I, int N) {
-    double d = 0.0;
-    for(int i = N; i > 1; i--) {
-        if(A[(i-1)*N + 1] < A[i*N + 1])
-            for(int j = 0; j < N; j++) {
-                d = A[i*N +j];
-                A[i*N + j] = A[(i-1)*N + j];
-                A[(i-1)*N + j] = d;
-
-                d = I[i*N + j];
-                I[i*N + j] = I[(i-1)*N + j];
-                I[(i-1)*N + j] = d;
-            }
-    }
-}
-
-//reduce the matrix to a diagonal one (values outside diagonal are 0)
-void diagonal_reduce(double* A, double* I, int N) {
-    double d = 0.0;
+/**
+ * Matrix inverse using Gauss-Jordan method
+ * @param A Input square matrix
+ * @param I Inverse of `A`
+ * @param N matrix order
+ */
+void inverse(double* A, double* I, int N) {
+    init_identity(I, N);
     for(int i = 0; i < N; i++) {
-        for(int j = 0; j < N; j++) {
-            if(j != i) {
-                d = A[j*N + i] / A[i*N + i];   
-                    for (int k = 0; k < N; k++) {
-                        A[j*N + k] -= A[i*N + k] * d;
-                        I[j*N + k] -= I[i*N + k] * d;
+
+        // outside diagonal division
+        for(int col = 0; col < N; col++) {
+            if(col != i) {
+                I[i*N + col] /= A[i*N + i];
+                A[i*N + col] /= A[i*N + i];
+            }
+        }
+
+        // diagonal division
+        I[i*N + i] = I[i*N + i] / A[i*N + i];
+        A[i*N + i]  = 0;
+
+        // gauss jordan
+        for(int row = 0; row < N; row++) {
+            for(int col = 0; col < N; col++) {
+                if (row != i){
+
+                    double A2 = A[row*N + i];
+                    double I1 = I[row*N + col];
+                    double I2 = I[i*N + col];
+
+                    I1 -= I2 * A2;
+                    I[row*N + col] = I1;
+                    
+                    if (col != i) {
+                        double A1 = A[row*N + col];
+                        double A3 = A[i*N + col];
+                        A1 -= A3 * A2;
+                        A[row*N + col] = A1;
                     }
+                }
             }
         }
     }
 }
 
-//reduce the matrix to identity obtaining the inverse in the second matrix
-void identity_reduce(double* A, double* I, int N) {
-    double d = 0.0;
-    for(int i = 0; i < N; i++) {
-        d = A[i*N + i];
-            for(int j = 0; j < N; j++) {
-                A[i*N +j] = A[i*N + j]/d;
-                I[i*N +j] = I[i*N + j]/d;
-            }
-    }
-}
-
-void inverse(double* A, double* I, int N) {
-    init_identity(I, N);
-    pivot_matrix(A, I, N);
-    diagonal_reduce(A, I, N);
-    identity_reduce(A, I, N);
-}
-
-//return a submatrix given rows and columns indices
-double* submatrix(double* A, int N, int M, int row_start, int row_end, int col_start, int col_end) {
-    int n_rows = row_end - row_start + 1;
-    int n_cols = col_end - col_start + 1;
-    double* sub = (double*) malloc(n_rows*n_cols*sizeof(double));
-
+/**
+ * Extract a submatrix
+ * @param B Submatrix of `A`
+ * @param A Input matrix
+ * @param N rows of `A`
+ * @param M columns of `B`
+ * @param row_start starting row index (inclusive)
+ * @param row_end ending row index (inclusive)
+ * @param col_start starting column (inclusive)
+ * @param col_end ending column (inclusive)
+ */
+void submatrix(double* B, double* A, int N, int M, int row_start, int row_end, int col_start, int col_end) {
     int k = 0;
     for(int i = row_start; i <= row_end; i++)
         for(int j = col_start; j <= col_end; j++) {
-            sub[k] = A[i*M + j];
+            B[k] = A[i*M + j];
             k++;
         }
-    return sub;
 }
 
+/**
+ * Subtract two submatrices
+ * @param C Result of `A` - `B`
+ * @param A first matrix
+ * @param B second matrix
+ * @param M number of columns of `A`
+ * @param M2 number of columns of `B`
+ */
+void submatrix_subtract(double* C, double* A, double* B, int M, int M2, int row_start, int row_end, int col_start, int col_end, int row_start2, int row_end2, int col_start2, int col_end2)
+{
+    int n_rows1 = row_end - row_start;
+    int n_cols1 = col_end - col_start;
+    int n_rows2 = row_end2 - row_start2;
+    int n_cols2 = col_end2 - col_start2;
+
+    if(n_rows1 != n_rows2 || n_cols1 != n_cols2) {
+        cout << "submatrix_subtract = numero di righe / colonne diverso" << endl;
+        return;
+    }
+    int k = 0;
+
+    for(int i = 0; i <= n_rows1; i++)
+        for(int j = 0; j <= n_cols1; j++) {
+            C[k] = A[(i+row_start)*M + j + col_start] - B[(i+row_start2)*M2 + j + col_start2];
+            k++;
+        }
+}        
+                                  
+/**
+ * Cholesky decomposition for rank deficient matrix
+ * @param A input square matrix
+ * @param L lower triangular matrix of `A`
+ * @param N number of row/col of `A`
+ * @return rank of `L`
+*/
 int full_rank_cholesky_decomposition(double* A, double* L, int N) {
     memset(L, 0, N*N*sizeof(double));
+    double* a = (double*) malloc(N*sizeof(double));
+    double* b = (double*) malloc(N*N*sizeof(double));
+    double* c = (double*) malloc(N*sizeof(double));
+    double* d = (double*) malloc(N*sizeof(double));
+
+    //tollerance threshold for sqrt, it's the diagonal minimum
     double tol = A[0];
     for(int i = 0; i < N; i++) {
         double k = A[i*N + i];
@@ -140,25 +206,19 @@ int full_rank_cholesky_decomposition(double* A, double* L, int N) {
     for(int k = 0; k < N; k++) {
         r = r+1;
 
-        double* a = submatrix(A, N, N, k, N-1, k, k);
-
-        if(r-2 >= 0) {
-            double* b = submatrix(L, N, N, k, N-1, 0, r-2);
-            double* c = submatrix(L, N, N, k, k, 0, r-2);
-            double* d = (double*) malloc((N-k)*sizeof(double));
-            product(b, N-k, r-1, c, r-1, 1, d);
-            subtract(a, d, N-k, 1);
-
-            free(b);
-            free(c);
-            free(d);
+        if(r < 2)
+            submatrix(a, A, N, N, k, N-1, k, k); // A(k:N-1, k:k)
+        else {
+            submatrix(b, L, N, N, k, N-1, 0, r-2); // L(k:N-1, 0:r-2)
+            submatrix(c, L, N, N, k, k, 0, r-2);  // transpose of L(k:k, 0:r-2)
+            product(b, N-k, r-1, c, r-1, 1, d);  
+            submatrix_subtract(a, A, d, N, 1, k, N-1, k, k, 0, N-k-1, 0, 0);
         }
 
+        //copying result non zero values, each time it copies one element less to form a triangular matrix
         for(int i = k; i < N; i++)
             L[i*N + r-1] = a[i-k];
         
-        free(a);
-
         if(L[k*N + r-1] > tol) {
             L[k*N + r-1] = sqrt(L[k*N + r-1]);
 
@@ -170,10 +230,21 @@ int full_rank_cholesky_decomposition(double* A, double* L, int N) {
             r = r-1;
     }
 
+    free(a);
+    free(b);
+    free(c);
+    free(d);
+
     return r;
 }
 
-//return a matrix with column from 0 to rank
+/**
+ * Drop columns composed by zeroes of a matrix
+ * @param A input square matrix
+ * @param B `A` with dropped columns
+ * @param N number of rows/columns of `A`
+ * @return rank of `A`
+*/
 void drop_zero_column(double* A, double* B, int N, int rank) {
     int k = 0;
     for(int i = 0; i < N; i++)
@@ -183,8 +254,15 @@ void drop_zero_column(double* A, double* B, int N, int rank) {
         }    
 }
 
-double geninv(double* G, double* Y, int N, int M)
-{
+/**
+ * Moore-Penrose generalized inverse matrix
+ * @param G Input matrix
+ * @param Y Generalized inverse
+ * @param N number of rows of `G` 
+ * @param M number of columns `G`
+ * @return execution time
+ */
+double geninv(double* G, double* Y, int N, int M) {
     int old_M = M; // to remember M original value
     bool transposed = false; // true if N < M
     double* Gt = (double *) malloc(M*N*sizeof(double)); // transpose of G
@@ -218,12 +296,14 @@ double geninv(double* G, double* Y, int N, int M)
         product(Gt, old_M, N, G, N, old_M, A); // A = Gt * G
 
     int rank = full_rank_cholesky_decomposition(A, S, M); // S = cholesky(A)
-
     drop_zero_column(S, L, M, rank); // L = S without zero columns
     transpose(L, Lt, M, rank);
     product(Lt, rank, M, L, M, rank, Lt_L); // Lt_L = Lt * L
-
+    double aaa = seconds();
     inverse(Lt_L, I, rank); // I = inverse(Lt_L)
+    double bbb = seconds();
+
+    cout << "I on cpu: " << bbb - aaa << endl;
 
     double* tmp;
     double* tmp1; 
@@ -251,7 +331,6 @@ double geninv(double* G, double* Y, int N, int M)
     }
 
     double stop = seconds();
-    //cout << "\nMoore-Penrose pseudoinverse calculation time on CPU: " << stop - start << " seconds" << endl;
 
     free(Gt);
     free(A);

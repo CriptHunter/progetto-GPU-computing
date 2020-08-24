@@ -3,7 +3,23 @@
 #define BLOCK_SIZE 32
 #define INDEX(rows, cols, stride) (rows * stride + cols)
 
-__global__ void transpose_gpu(double *a_t, double *a, int nrows, int ncols) {
+
+__global__ void subtract_gpu(double* a, double* b, int N, int M) {
+    uint row = blockIdx.y * blockDim.y + threadIdx.y;
+    uint col = blockIdx.x * blockDim.x + threadIdx.x;
+
+    int i = row*M + col;
+    if(row < N && col < M)
+        a[i] = a[i] - b[i];
+}
+
+/**
+ * transpose matrix
+ * @param At Transpose of `A`
+ * @param A Input matrix
+ * @param N number of rows of `A`
+*/
+__global__ void transpose_gpu(double *At, double *A, int N, int M) {
 	// static shared memory
 	__shared__ double tile[BLOCK_SIZE][BLOCK_SIZE];
 
@@ -11,8 +27,8 @@ __global__ void transpose_gpu(double *a_t, double *a, int nrows, int ncols) {
     unsigned int x = blockDim.x * blockIdx.x + threadIdx.x;
 
 	// trasferimento dati dalla global memory alla shared memory
-	if (y < nrows && x < ncols)
-        tile[threadIdx.y][threadIdx.x] = a[INDEX(y, x, ncols)];
+	if (y < N && x < M)
+        tile[threadIdx.y][threadIdx.x] = A[INDEX(y, x, M)];
 
 	// thread synchronization
 	__syncthreads();
@@ -22,10 +38,16 @@ __global__ void transpose_gpu(double *a_t, double *a, int nrows, int ncols) {
 	x = blockIdx.y * blockDim.y + threadIdx.x;
 
 	// controlli invertiti nelle dim riga colonna
-	if (y < ncols && x < nrows)
-        a_t[y*nrows + x] = tile[threadIdx.x][threadIdx.y];
+	if (y < M && x < N)
+        At[y*N + x] = tile[threadIdx.x][threadIdx.y];
 }
 
+/**
+ * matrix product
+ * @param A First matrix
+ * @param B Second matrix
+ * @param C `A` * `B`
+*/
 __global__ void product_gpu(double* A, double* B, double* C, int N, int M, int P) {
 	// indexes
 	uint row = blockIdx.y * blockDim.y + threadIdx.y;
@@ -73,8 +95,18 @@ __global__ void product_gpu(double* A, double* B, double* C, int N, int M, int P
 		C[row * M + col] = sum;
 }
 
-// Compute submatrix B of A with row starting on row_start and ending on row_end included
-// columns starting on col_start and ending on col_end included
+
+/**
+ * Extract a submatrix
+ * @param B Submatrix of `A`
+ * @param A Input matrix
+ * @param N rows of `A`
+ * @param M columns of `B`
+ * @param row_start starting row index (inclusive)
+ * @param row_end ending row index (inclusive)
+ * @param col_start starting column (inclusive)
+ * @param col_end ending column (inclusive)
+ */
 __global__ void submatrix_gpu(double* A, double* B, int N, int M, int row_start, int row_end, int col_start, int col_end) {
     uint n_cols = col_end - col_start + 1;
     uint row = blockIdx.y * blockDim.y + threadIdx.y;
@@ -85,43 +117,92 @@ __global__ void submatrix_gpu(double* A, double* B, int N, int M, int row_start,
     }
 }
 
-// divide element on row i (diagonal excluded) of I and A by diagonal element A[i][i]
+
+/**
+ * divide all the element of row `i` by diagonal element of row `i` for both `A` and `I`
+ * @param A Input matrix
+ * @param I Partial inverse of `A`
+ * @param N Number of rows/columns of `A`
+ * @param i current row
+ */
 __global__ void inverse_no_diag_division_gpu(double *A, double *I, int N, int i){
 	int col = blockIdx.x * blockDim.x + threadIdx.x;
-	int row = blockIdx.y * blockDim.y + threadIdx.y;
+    int row = blockIdx.y * blockDim.y + threadIdx.y;
+        
+    __shared__ double tile_A[BLOCK_SIZE][BLOCK_SIZE];
+    __shared__ double tile_I[BLOCK_SIZE][BLOCK_SIZE];
+    double diag;
+    
+    if (row == i && col != row && row < N && col < N) {
+            tile_A[threadIdx.y][threadIdx.x] = A[row*N + col];
+            tile_I[threadIdx.y][threadIdx.x] = I[row*N + col];
+            diag = A[i*N + i];
 
-    if (col < N && row < N)
-        if (col != row && row == i) {
-            I[i*N + col] /= A[i*N + i];
-            A[i*N + col] /= A[i*N + i];
-        }
+            A[i*N + col] = tile_A[threadIdx.y][threadIdx.x] / diag;
+            I[i*N + col] = tile_I[threadIdx.y][threadIdx.x] / diag;
+    }
 }
 
-// divide the diagonal element I[i][i] by A[i][i]
+/**
+ * divide diagonal element of row `i` of `I` by diagonal element of row `i` of `A`
+ * set diagonal elemento of row `i` of A to zero
+ * @param A Input matrix
+ * @param I Partial inverse of `A`
+ * @param N Number of rows/columns of `A`
+ * @param i current row
+ */
 __global__ void inverse_diag_division_gpu(double *A, double *I, int N, int i){
 	int col = blockIdx.x * blockDim.x + threadIdx.x;
     int row = blockIdx.y * blockDim.y + threadIdx.y;
         
     if(row == 0 && col == 0) {
         I[i*N + i] = I[i*N + i] / A[i*N + i];
-        A[i*N + i]  = 0; // set to 0 to obtain identity on A
+        A[i*N + i]  = 0; // set to 0 to obtain identity on A 
     }
     
 }
 
+/**
+ * Gauss-Jordan elimination for matrix inverse
+ * @param A Input matrix
+ * @param I Partial inverse of `A`
+ * @param N Number of rows/columns of `A`
+ * @param i current row
+ */
 __global__ void inverse_gauss_jordan_gpu(double *A, double *I, int N, int i) {
 	int col = blockIdx.x * blockDim.x + threadIdx.x;
 	int row = blockIdx.y * blockDim.y + threadIdx.y;
 
+    __shared__ double tile_A[BLOCK_SIZE][BLOCK_SIZE];
+    __shared__ double tile_A2[BLOCK_SIZE][BLOCK_SIZE];
+    __shared__ double tile_A3[BLOCK_SIZE][BLOCK_SIZE];
+    __shared__ double tile_I[BLOCK_SIZE][BLOCK_SIZE];
+    __shared__ double tile_I2[BLOCK_SIZE][BLOCK_SIZE];
+    
 	if (col < N && row < N){
-		if (col != i){
-			I[col*N + row] = I[col*N + row] - I[i*N + row] * A[col*N + i];
-			if (row != i)
-				A[col*N + row] = A[col*N + row] - A[i*N + row] * A[col*N + i];
+		if (row != i){
+            tile_A[threadIdx.y][threadIdx.x] = A[row*N + col];
+            tile_A2[threadIdx.y][threadIdx.x] = A[row*N + i];
+            tile_A3[threadIdx.y][threadIdx.x] = A[i*N + col];
+            tile_I[threadIdx.y][threadIdx.x] = I[row*N + col];
+            tile_I2[threadIdx.y][threadIdx.x] = I[i*N + col];
+
+            tile_I[threadIdx.y][threadIdx.x] -= tile_I2[threadIdx.y][threadIdx.x] * tile_A2[threadIdx.y][threadIdx.x]; 
+            
+            if (col != i)
+                tile_A[threadIdx.y][threadIdx.x] -= tile_A3[threadIdx.y][threadIdx.x] * tile_A2[threadIdx.y][threadIdx.x];
+            
+            A[row*N + col] = tile_A[threadIdx.y][threadIdx.x];
+            I[row*N + col] = tile_I[threadIdx.y][threadIdx.x];
 		}
 	}
 }
 
+/**
+ * initialize identity matrix
+ * @param A input matrix
+ * @param N matrix order
+ */
 __global__ void inverse_init_identity_gpu(double* A, int N) {
     uint row = blockIdx.y * blockDim.y + threadIdx.y;
     uint col = blockIdx.x * blockDim.x + threadIdx.x;
@@ -134,6 +215,14 @@ __global__ void inverse_init_identity_gpu(double* A, int N) {
     }
 }
 
+/**
+ * Moore-Penrose generalized inverse matrix
+ * @param G Input matrix
+ * @param Y Generalized inverse
+ * @param N number of rows of `G` 
+ * @param M number of columns `G`
+ * @return execution time
+ */
 double geninv_gpu(double* G, double* Y, int N, int M) {
     int old_M = M; // to remember M original value
     bool transposed = false; // true if N < M
@@ -184,15 +273,21 @@ double geninv_gpu(double* G, double* Y, int N, int M) {
         product_gpu<<<grid, block>>>(d_G, d_Gt, d_A, N, N, old_M); // // A = G * Gt 
     else
         product_gpu<<<grid, block>>>(d_Gt, d_G, d_A, old_M, old_M, N); // // A = Gt * G 
-
+    
+    double aaa = seconds();
     cudaMemcpy(A, d_A, M*M*sizeof(double), cudaMemcpyDeviceToHost);
     int rank = full_rank_cholesky_decomposition(A, S, M); // S = cholesky(A)
     cudaMemcpy(d_S, S, M*M*sizeof(double), cudaMemcpyHostToDevice);
+    //int rank = full_rank_cholesky_decomposition_gpu(d_S, d_A, M, block, grid);
+    double bbb = seconds();
+    cout << "S on GPU: " << bbb - aaa << endl;
 
     submatrix_gpu<<<grid, block>>>(d_S, d_L, M, M, 0, M, 0, rank-1); // S = L with zeros columns dropped
     transpose_gpu<<<grid, block>>>(d_Lt, d_L, M, rank); // transpose of L
     product_gpu<<<grid, block>>>(d_Lt, d_L, d_Lt_L, rank, rank, M); // Lt_L = Lt * L
 
+
+    aaa = seconds();
     // I = inv(Lt_L)
     inverse_init_identity_gpu<<<grid, block>>>(d_I, rank);
     for (int i = 0; i < rank; i++){
@@ -200,6 +295,8 @@ double geninv_gpu(double* G, double* Y, int N, int M) {
         inverse_diag_division_gpu <<<1, 1>>>(d_Lt_L, d_I, rank, i);
         inverse_gauss_jordan_gpu <<<grid, block>>>(d_Lt_L, d_I, rank, i);
     }
+    bbb = seconds();
+    cout << "inverse on GPU: " << bbb - aaa << endl;
 
     double* d_tmp;
     double* d_tmp1; 
@@ -228,8 +325,8 @@ double geninv_gpu(double* G, double* Y, int N, int M) {
         CHECK( cudaMalloc((void**) &d_Y, M*N*sizeof(double)) );
         product_gpu<<<grid, block>>>(d_tmp2, d_Gt, d_Y, M, N, M);
     }
-
     cudaDeviceSynchronize();
+
     double stop = seconds();
 
     CHECK( cudaMemcpy(Y, d_Y, old_M*N*sizeof(double), cudaMemcpyDeviceToHost) );
@@ -246,6 +343,5 @@ double geninv_gpu(double* G, double* Y, int N, int M) {
     cudaFree(d_Y);
     cudaDeviceReset();
 
-    //cout << "\nMoore-Penrose pseudoinverse calculation time on GPU: " << stop - start << " seconds" << endl;
     return stop - start;
 }

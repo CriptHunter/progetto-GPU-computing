@@ -15,7 +15,7 @@ void random_matrix(double* G, int N, int M) {
     srand(time(NULL));
     for(int i = 0; i < N; i++)
         for(int j = 0; j < M; j++)
-            G[i*M + j] = rand() % 10;
+            G[i*M + j] = rand() % 100;
             //G[i*M + j] = i*M + j + 10;
 }
 
@@ -31,8 +31,8 @@ void printf_matrix(double* A, int N, int M, const char* filename) {
 }
 
 int main() {
-    int N = 1500;
-    int M = 1500;
+    int N = 4;
+    int M = 4;
 
     double* G = (double *) malloc(N*M*sizeof(double)); // start matrix
     double* Y = (double *) malloc(M*N*sizeof(double)); // pseudoinverse
@@ -40,16 +40,16 @@ int main() {
     random_matrix(G, N, M);
     printf_matrix(G, N, M, "matrix.txt");
 
-    //exec and print from CPU
+    // //exec and print from CPU
     double time_cpu = geninv(G, Y, N, M);
-    cout << "\nMoore-Penrose pseudoinverse calculation time on CPU: " << time_cpu << " seconds" << endl;
+    cout << "Moore-Penrose pseudoinverse calculation time on CPU: " << time_cpu << " seconds\n\n";
     printf_matrix(Y, M, N, "pseudoinverse_CPU.txt");
 
     memset(Y, 0, M*N*sizeof(double));
 
     //exec and print from GPU
     double time_gpu = geninv_gpu(G, Y, N, M);
-    cout << "\nMoore-Penrose pseudoinverse calculation time on GPU: " << time_gpu << " seconds" << endl;
+    cout << "Moore-Penrose pseudoinverse calculation time on GPU: " << time_gpu << " seconds\n\n";
     printf_matrix(Y, M, N, "pseudoinverse_GPU.txt");
 
     cout << "\n GPU is " << time_cpu / time_gpu << " times faster than CPU" << endl;
@@ -59,3 +59,4 @@ int main() {
 
     return 0;
 }
+

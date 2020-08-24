@@ -1,6 +1,0 @@
-
-Moore-Penrose pseudoinverse calculation time on CPU: 145.213 seconds
-
-Moore-Penrose pseudoinverse calculation time on GPU: 18.2777 seconds
-
- GPU is 7.94483 times faster than CPU
