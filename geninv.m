@@ -1,12 +1,12 @@
 function Y = geninv(G)
 
 G = dlmread('matrix.txt');
+y = dlmread('constants_vector.txt');
 [m,n] = size(G);
 
 
 % Returns the Moore-Penrose inverse of the argument
  % Transpose if m < n
- tic;
 [m,n]=size(G); transpose=false;
 if m<n
     transpose=true;
@@ -50,6 +50,8 @@ if transpose
 else
  Y=L*M*M*L'*G';
 end 
-t = toc
 
 writematrix(Y,'pseudoinverse_matlab.txt','Delimiter','tab')
+x = Y * y;
+writematrix(x, 'least_square_matlab.txt', 'Delimiter','tab')
+

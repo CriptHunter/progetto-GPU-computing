@@ -1,7 +1,5 @@
-// C++ program to calculate Moore-Penrose inverse matrix
-
 /**
- * Print a matrix in a fancy way
+ * Print a matrix on std output
  * @param A Input matrix
  * @param N number of rows
  * @param M number of columns
@@ -32,7 +30,7 @@ void transpose(double *A, double *At, int N, int M) {
 }
 
 /**
- * Matrix transpose
+ * Matrix product
  * @param A First matrix
  * @param N1 number of rows of `A`
  * @param M1 number of columns of `A`
@@ -92,35 +90,42 @@ void init_identity(double* A, int N) {
  */
 void inverse(double* A, double* I, int N) {
     init_identity(I, N);
-    for(int i = 0; i < N; i++) {
+    double A1;
+    double A2;
+    double A3;
+    double I1;
+    double I2;
 
-        // outside diagonal division
+    // c_row is the current row
+    for(int c_row = 0; c_row < N; c_row++) {
+
+        // divide element outside diagonal
         for(int col = 0; col < N; col++) {
-            if(col != i) {
-                I[i*N + col] /= A[i*N + i];
-                A[i*N + col] /= A[i*N + i];
+            if(col != c_row) {
+                I[c_row*N + col] /= A[c_row*N + c_row];
+                A[c_row*N + col] /= A[c_row*N + c_row];
             }
         }
 
-        // diagonal division
-        I[i*N + i] = I[i*N + i] / A[i*N + i];
-        A[i*N + i]  = 0;
+        // divide diagonal element
+        I[c_row*N + c_row] = I[c_row*N + c_row] / A[c_row*N + c_row];
+        A[c_row*N + c_row]  = 0;
 
         // gauss jordan
         for(int row = 0; row < N; row++) {
             for(int col = 0; col < N; col++) {
-                if (row != i){
+                if (row != c_row) {
 
-                    double A2 = A[row*N + i];
-                    double I1 = I[row*N + col];
-                    double I2 = I[i*N + col];
+                    A2 = A[row*N + c_row];
+                    I1 = I[row*N + col];
+                    I2 = I[c_row*N + col];
 
                     I1 -= I2 * A2;
                     I[row*N + col] = I1;
                     
-                    if (col != i) {
-                        double A1 = A[row*N + col];
-                        double A3 = A[i*N + col];
+                    if (col != c_row) {
+                        A1 = A[row*N + col];
+                        A3 = A[c_row*N + col];
                         A1 -= A3 * A2;
                         A[row*N + col] = A1;
                     }
@@ -158,7 +163,8 @@ void submatrix(double* B, double* A, int N, int M, int row_start, int row_end, i
  * @param M number of columns of `A`
  * @param M2 number of columns of `B`
  */
-void submatrix_subtract(double* C, double* A, double* B, int M, int M2, int row_start, int row_end, int col_start, int col_end, int row_start2, int row_end2, int col_start2, int col_end2)
+void submatrix_subtract(double* C, double* A, double* B, int M, int M2, int row_start, int row_end, int col_start, int col_end, 
+                                                                        int row_start2, int row_end2, int col_start2, int col_end2)
 {
     int n_rows1 = row_end - row_start;
     int n_cols1 = col_end - col_start;
@@ -214,7 +220,6 @@ int full_rank_cholesky_decomposition(double* A, double* L, int N) {
             product(b, N-k, r-1, c, r-1, 1, d);  
             submatrix_subtract(a, A, d, N, 1, k, N-1, k, k, 0, N-k-1, 0, 0);
         }
-
         //copying result non zero values, each time it copies one element less to form a triangular matrix
         for(int i = k; i < N; i++)
             L[i*N + r-1] = a[i-k];
@@ -299,11 +304,7 @@ double geninv(double* G, double* Y, int N, int M) {
     drop_zero_column(S, L, M, rank); // L = S without zero columns
     transpose(L, Lt, M, rank);
     product(Lt, rank, M, L, M, rank, Lt_L); // Lt_L = Lt * L
-    double aaa = seconds();
     inverse(Lt_L, I, rank); // I = inverse(Lt_L)
-    double bbb = seconds();
-
-    cout << "I on cpu: " << bbb - aaa << endl;
 
     double* tmp;
     double* tmp1; 
@@ -344,6 +345,18 @@ double geninv(double* G, double* Y, int N, int M) {
     free(tmp2);
 
     return stop - start;
+}
+
+/**
+ * find least squares of a linear system using moore-penrose pseudoinverse
+ * @param A Pseudoinverse
+ * @param x variables vector
+ * @param y constants vector
+ * @param N number of equations 
+ * @param M number of variables
+ */
+void least_square(double* A, double* x, double* y, int N, int M) {
+    product(A, M, N, y, N, 1, x);
 }
 
 
