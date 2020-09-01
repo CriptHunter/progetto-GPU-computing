@@ -22,14 +22,13 @@ void random_matrix(double* A, int N, int M, int range) {
     for(int i = 0; i < N; i++)
         for(int j = 0; j < M; j++) {
             A[i*M + j] = rand() % range;
-            //A[i*M + j] = i*M + j + 10;
         }
 
 }
 
 /**
  * print a matrix to a text file
- * @param A random matrix
+ * @param A input matrix
  * @param N rows of `A`
  * @param M columns of `A`
  * @param filename name of the text file
@@ -99,9 +98,8 @@ int main() {
     test(128, 128);
     test(256, 256);
     test(512, 512);
-    // test(1024, 1024);
-    // test(2048, 2048);
-    // test(4096, 4096);
+    test(1024, 1024);
+    test(2048, 2048);
 
     // non-square matrix
     test(16, 8);

@@ -160,7 +160,6 @@ __global__ void inverse_gauss_jordan_gpu(double *A, double *I, int N, int c_row)
 	}
 }
 
-
 /**
  * initialize identity matrix
  * @param A input matrix

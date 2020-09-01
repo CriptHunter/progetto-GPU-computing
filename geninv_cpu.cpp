@@ -99,16 +99,17 @@ void inverse(double* A, double* I, int N) {
     // c_row is the current row
     for(int c_row = 0; c_row < N; c_row++) {
 
+        double diag = A[c_row*N + c_row];
         // divide element outside diagonal
         for(int col = 0; col < N; col++) {
             if(col != c_row) {
-                I[c_row*N + col] /= A[c_row*N + c_row];
-                A[c_row*N + col] /= A[c_row*N + c_row];
+                I[c_row*N + col] /= diag;
+                A[c_row*N + col] /= diag;
             }
         }
 
         // divide diagonal element
-        I[c_row*N + c_row] = I[c_row*N + c_row] / A[c_row*N + c_row];
+        I[c_row*N + c_row] = I[c_row*N + c_row] / diag;
         A[c_row*N + c_row]  = 0;
 
         // gauss jordan
@@ -175,8 +176,8 @@ void submatrix_subtract(double* C, double* A, double* B, int M, int M2, int row_
         cout << "submatrix_subtract = numero di righe / colonne diverso" << endl;
         return;
     }
-    int k = 0;
 
+    int k = 0;
     for(int i = 0; i <= n_rows1; i++)
         for(int j = 0; j <= n_cols1; j++) {
             C[k] = A[(i+row_start)*M + j + col_start] - B[(i+row_start2)*M2 + j + col_start2];
@@ -248,7 +249,7 @@ int full_rank_cholesky_decomposition(double* A, double* L, int N) {
  * @param A input square matrix
  * @param B `A` with dropped columns
  * @param N number of rows/columns of `A`
- * @return rank of `A`
+ * @param rank rank of `B`
 */
 void drop_zero_column(double* A, double* B, int N, int rank) {
     int k = 0;
