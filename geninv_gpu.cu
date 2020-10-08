@@ -94,33 +94,13 @@ __global__ void inverse_no_diag_division_gpu(double *A, double *I, int N, int c_
 	int col = blockIdx.x * blockDim.x + threadIdx.x;
     int row = blockIdx.y * blockDim.y + threadIdx.y;
         
-    __shared__ double diag;
-
-    if(threadIdx.x == 0 && threadIdx.y == 0)
-        diag = A[c_row*N + c_row];
-    __syncthreads();
+    double diag = A[c_row*N + c_row];
     
-    if (row == c_row && col != row && row < N && col < N) {
+    if(row == c_row && col != row) {
+        if(col < N) // if the thread is working on matrix A
             A[c_row*N + col] = A[c_row*N + col] / diag;
-            I[c_row*N + col] = I[c_row*N + col] / diag;
-    }
-}
-
-/**
- * divide diagonal element of row `c_row` of `I` by diagonal element of row `c_row` of `A`
- * set diagonal element of row `c_row` of A to zero
- * @param A Input matrix
- * @param I Partial inverse of `A`
- * @param N Number of rows/columns of `A`
- * @param c_row current row
- */
-__global__ void inverse_diag_division_gpu(double *A, double *I, int N, int c_row){
-	int col = blockIdx.x * blockDim.x + threadIdx.x;
-    int row = blockIdx.y * blockDim.y + threadIdx.y;
-        
-    if(row == 0 && col == 0) {
-        I[c_row*N + c_row] = I[c_row*N + c_row] / A[c_row*N + c_row];
-        A[c_row*N + c_row] = 0;
+        else if (col < N*2) // if the thread is working on matrix I
+            I[c_row*N + col - N] = I[c_row*N + col - N] / diag;
     }
 }
 
@@ -133,31 +113,20 @@ __global__ void inverse_diag_division_gpu(double *A, double *I, int N, int c_row
  */
 __global__ void inverse_gauss_jordan_gpu(double *A, double *I, int N, int c_row) {
 	int col = blockIdx.x * blockDim.x + threadIdx.x;
-	int row = blockIdx.y * blockDim.y + threadIdx.y;
+    int row = blockIdx.y * blockDim.y + threadIdx.y;
 
-    __shared__ double tile_A1[BLOCK_SIZE];
-    __shared__ double tile_A2[BLOCK_SIZE];
-    __shared__ double tile_I1[BLOCK_SIZE];
+    if(col < N && row < N && row != c_row) {
+        double i = I[c_row*N + col];
+        double a = A[row*N + c_row];
 
-    if (col < N && row < N) {
-        // if I'm the first thread of the row
-        if(threadIdx.x == 0) {
-            tile_A1[threadIdx.y] = A[row*N + c_row];
-        }
-
-        // if I'm the first thread of the column
-        if(threadIdx.y == 0) {
-            tile_A2[threadIdx.x] = A[c_row*N + col];
-            tile_I1[threadIdx.x] = I[c_row*N + col];
+        if(a != 0 && i != 0)
+            I[row*N + col] -= i * a;
+        if(col != c_row && a != 0) {
+            double a1 = A[c_row*N + col];
+            if(a1 != 0)
+                A[row*N + col] -= a1 * a;
         }
     }
-    __syncthreads();
-
-	if (row != c_row && col < N && row < N) {        
-        I[row*N + col] -= tile_I1[threadIdx.x] * tile_A1[threadIdx.y]; 
-        if (col != c_row)
-            A[row*N + col] -= tile_A2[threadIdx.x] * tile_A1[threadIdx.y];   
-	}
 }
 
 /**
@@ -190,6 +159,7 @@ double geninv_gpu(double* G, double* Y, int N, int M) {
     bool transposed = false; // true if N < M
     dim3 block(BLOCK_SIZE, BLOCK_SIZE, 1);
     dim3 grid((M + block.x - 1) / block.x, (N + block.y - 1) / block.y, 1);
+    dim3 grid_inv((M*2 + block.x - 1) / block.x, (N + block.y - 1) / block.y, 1);
     
     //cpu variables
     double* A;
@@ -229,7 +199,7 @@ double geninv_gpu(double* G, double* Y, int N, int M) {
     CHECK( cudaMalloc((void**) &d_L, M*M*sizeof(double)) );
     CHECK( cudaMalloc((void**) &d_Lt, M*M*sizeof(double)) );
     CHECK( cudaMalloc((void**) &d_Lt_L, M*M*sizeof(double)) );
-    CHECK( cudaMalloc((void**) &d_I, M*M*sizeof(double)) );
+    CHECK( cudaMalloc((void**) &d_I, M*2*M*sizeof(double)) );
 
     if(transposed)
         product_gpu<<<grid, block>>>(d_G, d_Gt, d_A, N, N, old_M); // A = G * Gt 
@@ -244,13 +214,13 @@ double geninv_gpu(double* G, double* Y, int N, int M) {
     transpose_gpu<<<grid, block>>>(d_Lt, d_L, M, rank); // transpose of L
     product_gpu<<<grid, block>>>(d_Lt, d_L, d_Lt_L, rank, rank, M); // Lt_L = Lt * L
 
-    // I = inv(Lt_L)
+    // Calculation of I = inv(Lt_L)
     inverse_init_identity_gpu<<<grid, block>>>(d_I, rank);
     for (int i = 0; i < rank; i++){
-        inverse_no_diag_division_gpu <<<grid, block>>>(d_Lt_L, d_I, rank, i);
-        inverse_diag_division_gpu <<<1, 1>>>(d_Lt_L, d_I, rank, i);
-        inverse_gauss_jordan_gpu <<<grid, block>>>(d_Lt_L, d_I, rank, i);
+        inverse_no_diag_division_gpu <<<grid_inv, block>>>(d_Lt_L, d_I, rank, i);
+        inverse_gauss_jordan_gpu <<<grid_inv, block>>>(d_Lt_L, d_I, rank, i);
     }
+
 
     double* d_tmp;
     double* d_tmp1; 

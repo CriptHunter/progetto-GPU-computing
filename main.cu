@@ -92,22 +92,23 @@ void test(int N, int M) {
 
 int main() {
     // square matrix
-    test(16, 16);
-    test(32, 32);
-    test(64, 64);
-    test(128, 128);
-    test(256, 256);
+    // test(4, 4);
+    // test(16, 16);
+    // test(32, 32);
+    // test(64, 64);
+    // test(128, 128);
+    // test(256, 256);
     test(512, 512);
-    test(1024, 1024);
-    test(2048, 2048);
+    // test(1024, 1024);
+    // test(2048, 2048);
 
     // non-square matrix
-    test(16, 8);
-    test(32, 1);
-    test(64, 15);
-    test(20, 128);
-    test(50, 256);
-    test(512, 490);
+    // test(16, 8);
+    // test(32, 1);
+    // test(64, 15);
+    // test(20, 128);
+    // test(50, 256);
+    // test(512, 490);
 
     return 0;
 }

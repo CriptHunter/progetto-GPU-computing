@@ -110,7 +110,7 @@ void inverse(double* A, double* I, int N) {
 
         // divide diagonal element
         I[c_row*N + c_row] = I[c_row*N + c_row] / diag;
-        A[c_row*N + c_row]  = 0;
+        A[c_row*N + c_row]  = 1;
 
         // gauss jordan
         for(int row = 0; row < N; row++) {
